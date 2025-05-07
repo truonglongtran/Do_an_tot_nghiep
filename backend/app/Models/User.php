@@ -2,29 +2,44 @@
 
 namespace App\Models;
 
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
-class User extends Model
+class User extends Authenticatable
 {
     use HasFactory;
 
-    protected $fillable = [
-        'email',
+    protected $fillable = ['email', 'password', 'role', 'status'];
+
+    protected $hidden = [
         'password',
-        'role',
-        'status',
+        'remember_token',
     ];
 
-    // Quan hệ với bảng Shops
-    public function shop()
+    protected $casts = [
+        'password' => 'hashed',
+    ];
+
+    public function shops()
     {
-        return $this->hasOne(Shop::class, 'owner_id');
+        return $this->hasMany(Shop::class, 'owner_id');
     }
 
-    // Quan hệ với bảng Orders
     public function orders()
     {
         return $this->hasMany(Order::class, 'buyer_id');
+    }
+
+    public function disputes()
+    {
+        return $this->hasMany(Dispute::class, 'buyer_id');
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class, 'buyer_id');
     }
 }

@@ -9,9 +9,5 @@ class ShippingPartner extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'name',
-        'api_url',
-        'status',
-    ];
+    protected $fillable = ['name', 'api_url', 'status'];
 }
