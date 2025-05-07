@@ -9,8 +9,5 @@ class Report extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'report_type',
-        'file_url',
-    ];
+    protected $fillable = ['report_type', 'file_url', 'created_at'];
 }

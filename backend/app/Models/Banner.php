@@ -9,12 +9,5 @@ class Banner extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'title',
-        'img_url',
-        'link_url',
-        'position',
-        'start_date',
-        'end_date',
-    ];
+    protected $fillable = ['title', 'img_url', 'link_url', 'position', 'start_date', 'end_date'];
 }

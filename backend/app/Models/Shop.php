@@ -9,22 +9,13 @@ class Shop extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'owner_id',
-        'shop_name',
-        'status',
-        'enabled_shipping_partners',
-        'avatar_url',
-        'cover_image_url',
-    ];
+    protected $fillable = ['owner_id', 'shop_name', 'status', 'enabled_shipping_partners', 'avatar_url', 'cover_image_url', 'created_at'];
 
-    // Quan hệ với bảng User
-    public function owner()
+    public function user()
     {
         return $this->belongsTo(User::class, 'owner_id');
     }
 
-    // Quan hệ với bảng Product
     public function products()
     {
         return $this->hasMany(Product::class);

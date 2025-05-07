@@ -9,18 +9,13 @@ class VoucherProduct extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'voucher_id',
-        'product_id',
-    ];
+    protected $fillable = ['voucher_id', 'product_id'];
 
-    // Quan hệ với bảng Voucher
     public function voucher()
     {
         return $this->belongsTo(Voucher::class);
     }
 
-    // Quan hệ với bảng Product
     public function product()
     {
         return $this->belongsTo(Product::class);

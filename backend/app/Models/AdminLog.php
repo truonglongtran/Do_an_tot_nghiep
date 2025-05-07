@@ -9,14 +9,8 @@ class AdminLog extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'admin_id',
-        'action_type',
-        'target_id',
-        'description',
-    ];
+    protected $fillable = ['admin_id', 'action_type', 'target_id', 'description', 'created_at'];
 
-    // Quan hệ với bảng Admin
     public function admin()
     {
         return $this->belongsTo(Admin::class);
