@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen flex items-center justify-center bg-gray-100">
     <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-      <h2 class="text-2xl font-bold mb-6 text-center">Đăng nhập Admin</h2>
+      <h2 class="text-2xl font-bold mb-6 text-center">Đăng nhập {{ roleLabel }}</h2>
       <form @submit.prevent="login">
         <div class="mb-4">
           <label class="block text-gray-700">Email</label>
@@ -39,13 +39,24 @@
 
 <script>
 import axios from 'axios';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 
 export default {
-  name: 'AdminLogin',
+  name: 'Login',
   setup() {
     const router = useRouter();
-    return { router };
+    const route = useRoute();
+    return { router, route };
+  },
+  computed: {
+    roleLabel() {
+      const type = this.route.path.split('/')[1]; // 'admin', 'seller', hoặc 'buyer'
+      return type === 'admin' ? 'Admin' : type === 'seller' ? 'Người bán' : 'Người mua';
+    },
+    loginEndpoint() {
+      const type = this.route.path.split('/')[1]; // Lấy 'admin', 'seller', hoặc 'buyer'
+      return `http://localhost:8000/api/${type}/login`; // Tạo URL đúng
+    },
   },
   data() {
     return {
@@ -66,27 +77,34 @@ export default {
       this.errors = { email: '', password: '' };
 
       try {
-        const response = await axios.post('http://localhost:8000/api/admin/login', this.form);
+        const response = await axios.post(this.loginEndpoint, this.form);
         if (response.status === 200 && response.data.token) {
-          // Đăng nhập thành công
-          localStorage.setItem('admin-token', response.data.token);
-          this.router.push('/admin/dashboard');
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem('role', response.data.role);
+          localStorage.setItem('loginType', this.route.path.split('/')[1]); // Lưu loginType
+
+          // Chuyển hướng theo loginType
+          const loginType = this.route.path.split('/')[1]; // 'admin', 'seller', hoặc 'buyer'
+          if (loginType === 'admin') {
+            this.router.push('/admin/dashboard');
+          } else if (loginType === 'seller') {
+            this.router.push('/seller/dashboard');
+          } else if (loginType === 'buyer') {
+            this.router.push('/buyer/dashboard'); // Cả seller và buyer vào /buyer/dashboard
+          }
         } else {
           this.errors.email = 'Đã có lỗi xảy ra khi đăng nhập';
         }
       } catch (error) {
-        console.error(error); // Kiểm tra chi tiết lỗi
         const message = error.response?.data?.message || 'Đã có lỗi xảy ra';
+        this.errors.email = message;
         if (message.includes('Thông tin đăng nhập')) {
-          this.errors.email = 'Email hoặc mật khẩu không đúng';
           this.errors.password = 'Email hoặc mật khẩu không đúng';
-        } else {
-          this.errors.email = message;
         }
       } finally {
         this.isLoading = false;
       }
-    }
+    },
   },
 };
 </script>

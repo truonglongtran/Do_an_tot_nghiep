@@ -1,5 +1,4 @@
 <?php
-
 return [
     'defaults' => [
         'guard' => 'web',
@@ -17,6 +16,10 @@ return [
         'api' => [
             'driver' => 'sanctum',
             'provider' => 'admins',
+        ],
+        'api-user' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
         ],
     ],
     'providers' => [
