@@ -21,6 +21,10 @@ COPY . .
 # Cài đặt dependencies của Laravel
 RUN composer install
 
+# Publish Sanctum config + migrate (nếu database ready)
+RUN php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider" --force
+
+
 # Expose port cho Laravel (8000)
 EXPOSE 8000
 

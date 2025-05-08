@@ -9,33 +9,34 @@ services:
     volumes:
       - ./backend:/var/www
     ports:
-      - "8000:8000"  # Port Laravel
+      - "8000:8000"
     depends_on:
       - mysql
     networks:
       - app-network
-    command: sh -c "composer install && php-fpm"
+    command: sh -c "composer install && php artisan serve --host=0.0.0.0 --port=8000"
+
 
   # Dịch vụ Vue 3 (Frontend)
   vue:
     build:
       context: ./frontend
     container_name: vue_app
-    ports:
-      - "5173:5173"  # Port Vue 3
     volumes:
       - ./frontend:/app
+    ports:
+      - "5173:5173"
     command: sh -c "npm install && npm run dev"
     networks:
       - app-network
 
-  # Dịch vụ MySQL (CSDL)
+  # Dịch vụ MySQL (Database)
   mysql:
     image: mysql:8.0
     container_name: mysql_db
     restart: always
     ports:
-      - "33081:3306"  # Port MySQL
+      - "33081:3306"
     environment:
       MYSQL_DATABASE: clone_sp
       MYSQL_ROOT_PASSWORD: root

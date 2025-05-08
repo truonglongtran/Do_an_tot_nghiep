@@ -15,19 +15,20 @@ class AdminAuthController extends Controller
             'email' => 'required|email',
             'password' => 'required',
         ]);
-
+    
         if (Auth::guard('admin')->attempt($credentials)) {
             $admin = Auth::guard('admin')->user();
             $token = $admin->createToken('admin-token')->plainTextToken;
+    
             return response()->json([
                 'token' => $token,
                 'admin' => $admin,
             ], 200);
         }
-
+    
         return response()->json(['message' => 'Thông tin đăng nhập không hợp lệ'], 401);
     }
-
+    
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();

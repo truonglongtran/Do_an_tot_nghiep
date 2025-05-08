@@ -67,9 +67,15 @@ export default {
 
       try {
         const response = await axios.post('http://localhost:8000/api/admin/login', this.form);
-        localStorage.setItem('admin-token', response.data.token);
-        this.router.push('/admin/dashboard');
+        if (response.status === 200 && response.data.token) {
+          // Đăng nhập thành công
+          localStorage.setItem('admin-token', response.data.token);
+          this.router.push('/admin/dashboard');
+        } else {
+          this.errors.email = 'Đã có lỗi xảy ra khi đăng nhập';
+        }
       } catch (error) {
+        console.error(error); // Kiểm tra chi tiết lỗi
         const message = error.response?.data?.message || 'Đã có lỗi xảy ra';
         if (message.includes('Thông tin đăng nhập')) {
           this.errors.email = 'Email hoặc mật khẩu không đúng';
@@ -80,7 +86,7 @@ export default {
       } finally {
         this.isLoading = false;
       }
-    },
+    }
   },
 };
 </script>
