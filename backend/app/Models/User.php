@@ -42,4 +42,13 @@ class User extends Authenticatable
     {
         return $this->hasMany(Review::class, 'buyer_id');
     }
+    public function buyerAddresses()
+    {
+        return $this->hasMany(BuyerAddress::class);
+    }
+
+    public function sellerProfile()
+    {
+        return $this->hasOne(SellerProfile::class);
+    }
 }

@@ -13,15 +13,19 @@ return new class extends Migration
     {
         Schema::create('shops', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('owner_id')->constrained('users');
+            $table->foreignId('owner_id')->constrained('users')->onDelete('cascade');
             $table->string('shop_name');
+            $table->string('pickup_address');
+            $table->string('ward');
+            $table->string('district');
+            $table->string('city');
+            $table->string('phone_number');
+            $table->boolean('is_verified')->default(false);
             $table->enum('status', ['pending', 'active', 'banned'])->default('pending');
-            $table->json('enabled_shipping_partners')->nullable();
             $table->string('avatar_url')->nullable();
             $table->string('cover_image_url')->nullable();
             $table->timestamps();
         });
-        
     }
 
     /**
