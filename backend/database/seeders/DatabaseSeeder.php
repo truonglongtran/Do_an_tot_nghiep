@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             BannerSeeder::class,
             AdminLogSeeder::class,
             ReportSeeder::class,
+            BuyerAddressSeeder::class,
         ]);
        
     }

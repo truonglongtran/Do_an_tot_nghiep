@@ -23,10 +23,10 @@ const routes = [
   {
     path: '/admin',
     component: AdminLayout,
+    meta: { requiresAuth: true, role: 'admin', loginPath: '/admin/login' },
     children: [
-      { path: 'dashboard', component: () => import('@/views/Admin/Dashboard.vue') },
-      { path: 'users', component: () => import('@/views/Admin/Users.vue') },
-      // Thêm các route khác tương tự...
+      { path: 'dashboard', component: () => import('@/views/Admin/AdminDashboard.vue') },
+      { path: 'users', component: () => import('@/views/Admin/AdminUsers.vue') },
     ]
   },
   

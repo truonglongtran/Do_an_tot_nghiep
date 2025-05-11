@@ -6,6 +6,8 @@ use App\Models\Admin;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AuthController extends Controller
 {
@@ -16,15 +18,28 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
+        $email = $credentials['email'];
         $type = $request->segment(2); // 'admin', 'seller', hoặc 'buyer'
 
+        // Kiểm tra nếu người dùng đã bị khóa
+        if (Cache::has('login_locked_' . $email)) {
+            return response()->json(['message' => 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 30 phút.'], 403);
+        }
+
+        // Kiểm tra số lần thử đăng nhập với Rate Limiting
+        if (RateLimiter::tooManyAttempts('login:' . $email, 2)) {
+            // Khóa tài khoản trong 30 phút (1800 giây)
+            Cache::put('login_locked_' . $email, true, 1800);
+            return response()->json(['message' => 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 30 phút.'], 403);
+        }
+
         if ($type === 'admin') {
-            // Xác thực với bảng admins
             $admin = Admin::where('email', $credentials['email'])->first();
             if ($admin && Hash::check($credentials['password'], $admin->password)) {
                 if ($admin->status !== 'active') {
                     return response()->json(['message' => 'Tài khoản bị khóa admin'], 403);
                 }
+                RateLimiter::clear('login:' . $email); // Xóa giới hạn khi đăng nhập thành công
                 $token = $admin->createToken('admin-token', ['role:admin'])->plainTextToken;
                 return response()->json([
                     'token' => $token,
@@ -33,19 +48,12 @@ class AuthController extends Controller
                 ], 200);
             }
         } else {
-            // Xác thực với bảng users (cho buyer/seller)
             $user = User::where('email', $credentials['email'])->first();
             if ($user && Hash::check($credentials['password'], $user->password)) {
                 if ($user->status !== 'active') {
                     return response()->json(['message' => 'Tài khoản bị khóa'], 403);
                 }
-
-                // Kiểm tra vai trò chỉ cho /seller/login
-                if ($type === 'seller' && $user->role !== 'seller') {
-                    return response()->json(['message' => 'Chỉ người bán mới có thể đăng nhập tại đây'], 403);
-                }
-
-                // Không kiểm tra vai trò cho /buyer/login, cho phép cả buyer và seller
+                RateLimiter::clear('login:' . $email); // Xóa giới hạn khi đăng nhập thành công
                 $token = $user->createToken('user-token', ['role:' . $user->role])->plainTextToken;
                 return response()->json([
                     'token' => $token,
@@ -54,6 +62,9 @@ class AuthController extends Controller
                 ], 200);
             }
         }
+
+        // Nếu không thành công, tăng số lần thử
+        RateLimiter::hit('login:' . $email);
 
         return response()->json(['message' => 'Thông tin đăng nhập không hợp lệ'], 401);
     }

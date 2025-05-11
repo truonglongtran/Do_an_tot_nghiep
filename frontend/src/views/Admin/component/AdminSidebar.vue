@@ -34,20 +34,37 @@
     setup() {
       const router = useRouter();
       const logout = async () => {
+        const loginType = localStorage.getItem('loginType') || 'admin';
+        const token = localStorage.getItem('token');
+        console.log('Token khi đăng xuất:', token);
+        if (!token) {
+          alert('Không tìm thấy token. Vui lòng đăng nhập lại.');
+          router.push(`/${loginType}/login`);
+          return;
+        }
         try {
-          await axios.post(
-            'http://localhost:8000/api/admin/logout',
+          const response = await axios.post(
+            `http://localhost:8000/api/${loginType}/logout`,
             {},
             {
               headers: {
-                Authorization: `Bearer ${localStorage.getItem('admin-token')}`,
+                Authorization: `Bearer ${token}`,
               },
             }
           );
-          localStorage.removeItem('admin-token');
-          router.push('/admin/login');
+          console.log('Phản hồi đăng xuất:', response.data);
+          localStorage.removeItem('token');
+          localStorage.removeItem('role');
+          localStorage.removeItem('loginType');
+          alert('Đăng xuất thành công');
+          router.push(`/${loginType}/login`);
         } catch (error) {
-          console.error('Đăng xuất thất bại:', error);
+          console.error('Lỗi đăng xuất:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message,
+          });
+          alert('Đăng xuất thất bại: ' + (error.response?.data.message || error.message));
         }
       };
   
