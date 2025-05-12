@@ -7,7 +7,7 @@
           <th class="p-2 border">ID</th>
           <th class="p-2 border">Tên cửa hàng</th>
           <th class="p-2 border">Chủ sở hữu (email)</th>
-          <th class="p-2 border">Thành phố</th>
+          <th class="p-2 border">Địa chỉ</th>
           <th class="p-2 border">Trạng thái</th>
         </tr>
       </thead>
@@ -16,7 +16,9 @@
           <td class="p-2 border">{{ shop.id }}</td>
           <td class="p-2 border">{{ shop.shop_name }}</td>
           <td class="p-2 border">{{ shop.owner?.email }}</td>
-          <td class="p-2 border">{{ shop.city }}</td>
+          <td class="p-2 border">
+            {{ [shop.pickup_address, shop.ward, shop.district, shop.city].filter(Boolean).join(', ') }}
+          </td>
           <td class="p-2 border">{{ shop.status }}</td>
         </tr>
       </tbody>
