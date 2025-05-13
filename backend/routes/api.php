@@ -20,6 +20,12 @@ Route::prefix('admin')->group(function () {
         Route::put('/users/{id}', [UserController::class, 'update']); // sửa người dùng
         Route::delete('/users/{id}', [UserController::class, 'destroy']); // xóa người dùng
         Route::put('/users/{id}/status', [UserController::class, 'updateStatus']); // cập nhật trạng thái
+
+        Route::get('/shops', [ShopController::class, 'index']);
+        Route::put('/shops/{shop}/status', [ShopController::class, 'updateStatus']);
+        Route::delete('/shops/{shop}', [ShopController::class, 'destroy']);
+
+
     });
 });
 

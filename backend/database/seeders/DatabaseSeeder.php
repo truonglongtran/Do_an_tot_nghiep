@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
             AdminLogSeeder::class,
             ReportSeeder::class,
             BuyerAddressSeeder::class,
+            ShopShippingPartnerSeeder::class,
         ]);
        
     }

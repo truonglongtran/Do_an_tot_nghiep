@@ -90,7 +90,6 @@ export default {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('role', response.data.role);
       localStorage.setItem('loginType', this.route.path.split('/')[1]);
-      console.log('Token đã lưu:', localStorage.getItem('token')); // Log token
       const loginType = this.route.path.split('/')[1];
       if (loginType === 'admin') {
         this.router.push('/admin/dashboard');
