@@ -24,6 +24,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/shops', [ShopController::class, 'index']);
         Route::put('/shops/{shop}/status', [ShopController::class, 'updateStatus']);
         Route::delete('/shops/{shop}', [ShopController::class, 'destroy']);
+
+
     });
 });
 

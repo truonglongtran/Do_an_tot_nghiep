@@ -56,8 +56,8 @@
           </td>
           <td class="p-2 border">
             <select
-              v-model="shop.status"
-              @change="updateStatus(shop)"
+              :value="shop.status"
+              @change="openConfirmModal('status', shop, $event.target.value)"
               class="border p-1 rounded"
             >
               <option value="pending">Chờ duyệt</option>
@@ -67,7 +67,7 @@
           </td>
           <td class="px-4 py-2 border text-center">
             <button
-              @click="deleteShop(shop.id)"
+              @click="openConfirmModal('delete', shop)"
               class="text-red-600 hover:underline"
             >
               Xóa
@@ -76,16 +76,28 @@
         </tr>
       </tbody>
     </table>
+
+    <!-- Modal xác nhận -->
+    <ConfirmModal
+      :show="showConfirmModal"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :confirmText="'Xác nhận'"
+      :cancelText="'Hủy'"
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
-import FilterSearch from './component/AdminFilterSearch.vue'; // Giữ nguyên nếu đúng đường dẫn
+import FilterSearch from './component/AdminFilterSearch.vue';
+import ConfirmModal from './component/AdminConfirmModal.vue';
 
 export default {
   name: 'AdminShops',
-  components: { FilterSearch },
+  components: { FilterSearch, ConfirmModal },
   data() {
     return {
       shops: [],
@@ -98,6 +110,13 @@ export default {
         active: 'Hoạt động',
         banned: 'Bị khóa',
       },
+      showConfirmModal: false,
+      confirmAction: null,
+      confirmShop: null,
+      confirmTitle: 'Xác nhận',
+      confirmMessage: '',
+      newStatus: null,
+      originalStatus: null,
     };
   },
   computed: {
@@ -189,30 +208,69 @@ export default {
       try {
         await axios.put(
           `http://localhost:8000/api/admin/shops/${shop.id}/status`,
-          { status: shop.status },
+          { status: this.newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        shop.status = this.newStatus; // Chỉ cập nhật giao diện nếu API thành công
         alert('Cập nhật trạng thái thành công');
       } catch (error) {
         console.error('Lỗi cập nhật trạng thái:', error);
         alert('Cập nhật trạng thái thất bại');
+        shop.status = this.originalStatus; // Khôi phục trạng thái gốc nếu API thất bại
       }
     },
     async deleteShop(shopId) {
       const token = localStorage.getItem('token');
-      if (confirm('Bạn có chắc chắn muốn xóa cửa hàng này không?')) {
-        try {
-          await axios.delete(`http://localhost:8000/api/admin/shops/${shopId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          this.shops = this.shops.filter((shop) => shop.id !== shopId);
-          this.allShops = this.allShops.filter((shop) => shop.id !== shopId);
-          alert('Đã xóa cửa hàng thành công');
-        } catch (error) {
-          console.error('Lỗi khi xóa shop:', error);
-          alert('Xóa cửa hàng thất bại');
-        }
+      try {
+        await axios.delete(`http://localhost:8000/api/admin/shops/${shopId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        this.shops = this.shops.filter((shop) => shop.id !== shopId);
+        this.allShops = this.allShops.filter((shop) => shop.id !== shopId);
+        alert('Đã xóa cửa hàng thành công');
+      } catch (error) {
+        console.error('Lỗi khi xóa shop:', error);
+        alert('Xóa cửa hàng thất bại');
       }
+    },
+    openConfirmModal(action, shop, newStatus = null) {
+      this.confirmAction = action;
+      this.confirmShop = shop;
+      if (action === 'delete') {
+        this.confirmTitle = 'Xác nhận xóa';
+        this.confirmMessage = `Bạn có chắc chắn muốn xóa cửa hàng "${shop.shop_name || 'N/A'}" không?`;
+      } else if (action === 'status') {
+        this.originalStatus = shop.status; // Lưu trạng thái gốc
+        this.newStatus = newStatus; // Lưu trạng thái mới
+        this.confirmTitle = 'Xác nhận đổi trạng thái';
+        this.confirmMessage = `Bạn có chắc chắn muốn đổi trạng thái cửa hàng "${
+          shop.shop_name || 'N/A'
+        }" thành "${this.statusText[newStatus]}" không?`;
+      }
+      this.showConfirmModal = true;
+    },
+    async handleConfirm() {
+      if (this.confirmAction === 'delete') {
+        await this.deleteShop(this.confirmShop.id);
+      } else if (this.confirmAction === 'status') {
+        await this.updateStatus(this.confirmShop);
+      }
+      this.resetModal();
+    },
+    handleCancel() {
+      if (this.confirmAction === 'status' && this.confirmShop) {
+        this.confirmShop.status = this.originalStatus; // Khôi phục trạng thái gốc
+      }
+      this.resetModal();
+    },
+    resetModal() {
+      this.showConfirmModal = false;
+      this.confirmAction = null;
+      this.confirmShop = null;
+      this.confirmTitle = 'Xác nhận';
+      this.confirmMessage = '';
+      this.newStatus = null;
+      this.originalStatus = null;
     },
     setFilter(filter) {
       console.log('Set Shop Filter:', filter);
