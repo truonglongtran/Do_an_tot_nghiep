@@ -28,6 +28,8 @@ const routes = [
       { path: 'dashboard', component: () => import('@/views/Admin/AdminDashboard.vue') },
       { path: 'users', component: () => import('@/views/Admin/AdminUsers.vue') },
       { path: 'shops', component: () => import('@/views/Admin/AdminShop.vue') },
+      { path: 'admins', component: () => import('@/views/Admin/AdminAdmins.vue') },
+      { path: 'products', component: () => import('@/views/Admin/AdminProducts.vue') },
     ]
   },
   
