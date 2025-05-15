@@ -20,8 +20,8 @@ return new class extends Migration
             $table->integer('stock')->default(0);
             $table->enum('status', ['pending', 'approved', 'banned'])->default('pending');
             $table->timestamps();
+            $table->softDeletes();
         });
-        
     }
 
     /**

@@ -37,6 +37,9 @@ Route::prefix('admin')->group(function () {
 
         Route::get('/products', [ProductController::class, 'index']);
         Route::get('/products/{id}', [ProductController::class, 'show']);
+        Route::patch('/products/{id}/status', [ProductController::class, 'updateStatus']);
+        Route::patch('/variants/{id}/status', [ProductController::class, 'updateVariantStatus']);
+        Route::delete('/products/{id}', [ProductController::class, 'destroy']);
     });
 });
 
