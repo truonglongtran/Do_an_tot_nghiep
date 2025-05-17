@@ -21,7 +21,7 @@ class DatabaseSeeder extends Seeder
             ProductVariantSeeder::class,
             OrderSeeder::class,
             OrderItemSeeder::class,
-            PaymentSeeder::class,
+            // PaymentSeeder::class,
             DisputeSeeder::class,
             ReviewSeeder::class,
             VoucherSeeder::class,

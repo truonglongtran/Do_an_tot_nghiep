@@ -1,7 +1,6 @@
-```vue
 <template>
   <div class="p-8 space-y-6">
-    <h1 class="text-2xl font-bold">Quản lý admin</h1>
+    <h1 class="text-2xl font-bold">Quản lý Admin</h1>
     <div class="flex justify-between items-center">
       <FilterSearch
         :filters="filters"
@@ -14,11 +13,12 @@
         @click="openAddForm"
         class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
       >
-        Thêm admin
+        Thêm Admin
       </button>
     </div>
     <AdminForm
       v-if="showFormModal"
+      :admin="editingAdmin"
       :show="showFormModal"
       @close="showFormModal = false"
       @submit="handleAdminFormSubmit"
@@ -72,6 +72,12 @@
             </div>
           </td>
           <td class="px-4 py-2 border text-center">
+            <!-- <button
+              @click="openEditForm(admin)"
+              class="text-blue-600 hover:underline mr-2"
+            >
+              Sửa
+            </button> -->
             <button
               @click="openConfirmModal('delete', admin)"
               class="text-red-600 hover:underline"
@@ -124,6 +130,7 @@ export default {
       newStatus: null,
       originalStatus: null,
       showFormModal: false,
+      editingAdmin: null,
     };
   },
   computed: {
@@ -136,13 +143,11 @@ export default {
           count: this.filterCountByStatus(s),
         })),
       ];
-      const roleFilters = this.roles
-        .filter((role) => role !== 'superadmin')
-        .map((r) => ({
-          key: r,
-          label: r.charAt(0).toUpperCase() + r.slice(1),
-          count: this.filterCountByRole(r),
-        }));
+      const roleFilters = this.roles.map((r) => ({
+        key: r,
+        label: r.charAt(0).toUpperCase() + r.slice(1),
+        count: this.filterCountByRole(r),
+      }));
       const filters = [...statusFilters, ...roleFilters];
       console.log('Admin Filters:', filters);
       return filters;
@@ -150,18 +155,16 @@ export default {
     filteredAdmins() {
       const q = this.searchQuery.toLowerCase();
       console.log('Filtering Admins:', q, 'Filter:', this.currentFilter);
-      const result = this.allAdmins
-        .filter((admin) => admin.role !== 'superadmin')
-        .filter((admin) => {
-          const matchQuery =
-            (admin.email || '').toLowerCase().includes(q) ||
-            (admin.role || '').toLowerCase().includes(q);
-          const matchFilter =
-            this.currentFilter === 'all' ||
-            admin.status === this.currentFilter ||
-            admin.role === this.currentFilter;
-          return matchQuery && matchFilter;
-        });
+      const result = this.allAdmins.filter((admin) => {
+        const matchQuery =
+          (admin.email || '').toLowerCase().includes(q) ||
+          (admin.role || '').toLowerCase().includes(q);
+        const matchFilter =
+          this.currentFilter === 'all' ||
+          admin.status === this.currentFilter ||
+          admin.role === this.currentFilter;
+        return matchQuery && matchFilter;
+      });
       console.log('Filtered Admins:', result);
       return result;
     },
@@ -180,9 +183,9 @@ export default {
         const response = await axios.get('http://localhost:8000/api/admin/admins', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        this.admins = response.data.map(admin => ({
+        this.admins = response.data.map((admin) => ({
           ...admin,
-          tempStatus: admin.status === 'active'
+          tempStatus: admin.status === 'active',
         }));
         this.allAdmins = this.admins;
         this.roles = this.extractRoles(response.data);
@@ -211,20 +214,30 @@ export default {
         return;
       }
       try {
-        const response = await axios.post(
-          'http://localhost:8000/api/admin/admins',
-          { ...form, status: 'active' },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        this.admins.push({
-          ...response.data,
-          tempStatus: response.data.status === 'active'
-        });
-        this.allAdmins = [...this.admins];
+        const response = this.editingAdmin
+          ? await axios.put(
+              `http://localhost:8000/api/admin/admins/${this.editingAdmin.id}`,
+              form,
+              { headers: { Authorization: `Bearer ${token}` } }
+            )
+          : await axios.post(
+              'http://localhost:8000/api/admin/admins',
+              { ...form, status: 'active' },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+        if (this.editingAdmin) {
+          Object.assign(this.editingAdmin, response.data);
+        } else {
+          this.admins.push({
+            ...response.data,
+            tempStatus: response.data.status === 'active',
+          });
+          this.allAdmins = [...this.admins];
+        }
         this.showFormModal = false;
-        alert('Thêm admin thành công');
+        alert(this.editingAdmin ? 'Cập nhật admin thành công' : 'Thêm admin thành công');
       } catch (error) {
-        console.error('Lỗi khi thêm admin:', error);
+        console.error('Lỗi khi xử lý form admin:', error);
         if (error.response?.status === 422) {
           const errors = error.response.data.errors;
           let errorMessage = 'Lỗi xác thực:\n';
@@ -233,14 +246,14 @@ export default {
           }
           alert(errorMessage);
         } else {
-          alert('Lỗi: ' + (error.response?.data?.message || error.message));
+          alert('Lỗi: ' + (error.response?.data?.error || error.message));
         }
       }
     },
     async updateStatus(admin) {
       const token = localStorage.getItem('token');
       try {
-        await axios.put(
+        const response = await axios.put(
           `http://localhost:8000/api/admin/admins/${admin.id}/status`,
           { status: this.newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
@@ -250,28 +263,12 @@ export default {
         alert('Cập nhật trạng thái thành công');
       } catch (error) {
         console.error('Lỗi cập nhật trạng thái:', error);
-        alert('Cập nhật trạng thái thất bại');
-        admin.status = this.originalStatus;
+        alert('Cập nhật trạng thái thất bại: ' + (error.response?.data?.error || error.message));
         admin.tempStatus = this.originalStatus === 'active';
-      }
-    },
-    async deleteAdmin(adminId) {
-      const token = localStorage.getItem('token');
-      try {
-        await axios.delete(`http://localhost:8000/api/admin/admins/${adminId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        this.admins = this.admins.filter((admin) => admin.id !== adminId);
-        this.allAdmins = this.allAdmins.filter((admin) => admin.id !== adminId);
-        alert('Đã xóa admin thành công');
-      } catch (error) {
-        console.error('Lỗi khi xóa admin:', error);
-        alert('Xóa admin thất bại');
       }
     },
     confirmToggleStatus(admin) {
       const newStatus = admin.tempStatus ? 'active' : 'inactive';
-      admin.tempStatus = admin.status === 'active';
       this.openConfirmModal('status', admin, newStatus);
     },
     openConfirmModal(action, admin, newStatus = null) {
@@ -300,7 +297,6 @@ export default {
     },
     handleCancel() {
       if (this.confirmAction === 'status' && this.confirmAdmin) {
-        this.confirmAdmin.status = this.originalStatus;
         this.confirmAdmin.tempStatus = this.originalStatus === 'active';
       }
       this.resetModal();
@@ -315,24 +311,39 @@ export default {
       this.originalStatus = null;
     },
     openAddForm() {
+      this.editingAdmin = null;
       this.showFormModal = true;
     },
+    // openEditForm(admin) {
+    //   this.editingAdmin = { ...admin };
+    //   this.showFormModal = true;
+    // },
     applySearch() {
       console.log('Apply Admin Search:', this.searchQuery);
     },
     filterCountByStatus(status) {
-      const count = this.allAdmins
-        .filter((admin) => admin.role !== 'superadmin')
-        .filter((admin) => admin.status === status).length;
+      const count = this.allAdmins.filter((admin) => admin.status === status).length;
       console.log(`Count Status (${status}):`, count);
       return count;
     },
     filterCountByRole(role) {
-      const count = this.allAdmins
-        .filter((admin) => admin.role !== 'superadmin')
-        .filter((admin) => admin.role === role).length;
+      const count = this.allAdmins.filter((admin) => admin.role === role).length;
       console.log(`Count Role (${role}):`, count);
       return count;
+    },
+    async deleteAdmin(adminId) {
+      const token = localStorage.getItem('token');
+      try {
+        await axios.delete(`http://localhost:8000/api/admin/admins/${adminId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        this.admins = this.admins.filter((admin) => admin.id !== adminId);
+        this.allAdmins = this.allAdmins.filter((admin) => admin.id !== adminId);
+        alert('Đã xóa admin thành công');
+      } catch (error) {
+        console.error('Lỗi khi xóa admin:', error);
+        alert('Xóa admin thất bại');
+      }
     },
   },
 };
@@ -346,4 +357,3 @@ export default {
   transition: background-color 0.3s ease;
 }
 </style>
-```

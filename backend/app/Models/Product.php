@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
-    protected $fillable = ['shop_id', 'name', 'description', 'price', 'stock', 'status', 'created_at'];
+    protected $fillable = ['shop_id', 'name', 'description', 'status'];
 
     public function shop()
     {
