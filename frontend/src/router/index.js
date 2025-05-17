@@ -30,6 +30,7 @@ const routes = [
       { path: 'shops', component: () => import('@/views/Admin/AdminShop.vue') },
       { path: 'admins', component: () => import('@/views/Admin/AdminAdmins.vue') },
       { path: 'products', component: () => import('@/views/Admin/AdminProducts.vue') },
+      { path: 'orders', component: () => import('@/views/Admin/AdminOrders.vue') },
     ]
   },
   

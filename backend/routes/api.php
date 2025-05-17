@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\OrderController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +41,13 @@ Route::prefix('admin')->group(function () {
         Route::patch('/products/{id}/status', [ProductController::class, 'updateStatus']);
         Route::patch('/variants/{id}/status', [ProductController::class, 'updateVariantStatus']);
         Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+
+        Route::get('/orders', [OrderController::class, 'index']);
+        Route::get('/orders/{id}', [OrderController::class, 'show']);
+        Route::put('/orders/{id}/settled-status', [OrderController::class, 'updateSettledStatus']);
+        Route::put('/orders/{id}/shipping-status', [OrderController::class, 'updateShippingStatus']);
+        Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']);
+        Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
     });
 });
 

@@ -2,45 +2,50 @@
 
 namespace Database\Seeders;
 
-use App\Models\Order;
-use App\Models\Product;
 use Illuminate\Database\Seeder;
-use Faker\Factory as Faker;
+use Illuminate\Support\Facades\DB;
 
 class OrderItemSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
-    public function run()
+    public function run(): void
     {
-        $faker = Faker::create();
+        $orderIds = DB::table('orders')->pluck('id')->toArray();
+        $products = DB::table('products')->pluck('id')->toArray();
 
-        // Lấy danh sách ID của orders và products
-        $orderIds = Order::pluck('id')->toArray();
-        $productIds = Product::pluck('id')->toArray();
+        if (count($orderIds) > 0 && count($products) > 0) {
+            $items = [];
+            foreach ($orderIds as $orderId) {
+                $numItems = rand(1, 3);
+                $usedVariants = []; // Track used variants to avoid duplicates in one order
+                for ($i = 0; $i < $numItems; $i++) {
+                    $productId = $products[array_rand($products)];
+                    $variants = DB::table('product_variants')
+                        ->where('product_id', $productId)
+                        ->where('status', 'active')
+                        ->pluck('id')
+                        ->toArray();
 
-        // Kiểm tra xem có orders và products hay không
-        if (empty($orderIds) || empty($productIds)) {
-            echo "Error: Please seed the orders and products tables first.\n";
-            return;
-        }
+                    if (count($variants) > 0) {
+                        // Pick a variant not used in this order yet
+                        $availableVariants = array_diff($variants, $usedVariants);
+                        if (empty($availableVariants)) {
+                            continue; // Skip if no unique variants left
+                        }
+                        $variantId = $availableVariants[array_rand($availableVariants)];
+                        $usedVariants[] = $variantId;
 
-        // Tạo 50 bản ghi order_items
-        for ($i = 0; $i < 50; $i++) {
-            $quantity = $faker->numberBetween(1, 5); // Số lượng từ 1 đến 5
-            $price = $faker->randomFloat(2, 5, 500); // Giá từ 5.00 đến 500.00
-
-            \App\Models\OrderItem::create([
-                'order_id' => $faker->randomElement($orderIds),
-                'product_id' => $faker->randomElement($productIds),
-                'quantity' => $quantity,
-                'price' => $price,
-                'created_at' => $faker->dateTimeBetween('-3 months', 'now'),
-                'updated_at' => $faker->dateTimeBetween('-3 months', 'now'),
-            ]);
+                        $items[] = [
+                            'order_id' => $orderId,
+                            'product_id' => $productId,
+                            'product_variant_id' => $variantId,
+                            'quantity' => rand(1, 5),
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+                    }
+                }
+            }
+            DB::table('order_items')->insert($items);
         }
     }
 }

@@ -525,7 +525,7 @@ export default {
   display: inline;
 }
 .variant-content {
-  max-width: calc(400px - 48px - 1rem); /* Image 48px + indent 1rem */
+  max-width: calc(400px - 48px - 1rem);
   overflow: hidden;
   text-overflow: ellipsis;
 }
