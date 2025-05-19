@@ -11,13 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('voucher_products', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('voucher_id')->constrained('vouchers');
+        Schema::create('product_vouchers', function (Blueprint $table) {
+              $table->id();
+            $table->foreignId('voucher_id')->constrained('vouchers')->onDelete('cascade');
             $table->foreignId('product_id')->constrained('products');
             $table->timestamps();
         });
-        
     }
 
     /**
@@ -25,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('voucher_products');
+        Schema::dropIfExists('product_vouchers');
     }
 };

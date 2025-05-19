@@ -1,3 +1,259 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@import 'vue-multiselect/dist/vue-multiselect.css';
+
+/* Tùy chỉnh vue-multiselect */
+.multiselect {
+  position: relative !important;
+  font-size: 0.875rem !important;
+  width: 100% !important;
+}
+
+.multiselect__tags {
+  border: 1px solid #d1d5db !important; /* border-gray-300 */
+  border-radius: 0.375rem !important; /* rounded-md */
+  padding: 0.5rem 2.5rem 0.5rem 0.75rem !important; /* px-3 py-2, dành 24px cho mũi tên */
+  background: #ffffff !important;
+  min-height: 40px !important; /* Chiều cao tối thiểu */
+  line-height: 1.5rem !important;
+  font-size: 0.875rem !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+  /* display: flex !important; */
+  flex-wrap: wrap !important; /* Cho phép xuống dòng */
+  align-items: center !important;
+  box-sizing: border-box !important;
+  gap: 4px !important; /* Khoảng cách giữa các thẻ */
+}
+
+.multiselect__tags:focus-within {
+  border-color: #3b82f6 !important; /* focus:border-blue-500 */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important; /* focus:ring-2 */
+}
+
+.multiselect__tags-wrap {
+  display: flex !important;
+  flex-wrap: wrap !important; /* Đảm bảo thẻ xuống dòng */
+  align-items: center !important;
+  flex-grow: 1 !important;
+  gap: 4px !important;
+}
+
+/* Khi chưa chọn sản phẩm, multiselect__tags-wrap rỗng */
+.multiselect__tags-wrap:empty ~ .multiselect__input {
+  width: calc(100% - 32px) !important; /* Trừ padding 0.75rem + 2.5rem */
+  position: static !important;
+  padding: 0.5rem 0.75rem !important;
+  margin: 0 !important;
+  border: 1px solid transparent !important; /* Viền trong suốt để đồng bộ */
+  background: #ffffff !important;
+  height: 32px !important; /* Phù hợp với chiều cao tags */
+  line-height: 1.5rem !important;
+  font-size: 0.875rem !important;
+  color: #374151 !important; /* gray-700 */
+  outline: none !important;
+  box-sizing: border-box !important;
+  display: block !important;
+}
+
+.multiselect__tags-wrap:empty ~ .multiselect__input:focus {
+  border-color: #3b82f6 !important; /* focus:border-blue-500 */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important; /* focus:ring-2 */
+}
+
+/* Khi có sản phẩm được chọn, khôi phục hành vi mặc định */
+.multiselect__tags-wrap:not(:empty) ~ .multiselect__input {
+  width: 100% !important;
+  min-width: 120px !important;
+  flex-grow: 1 !important;
+  padding: 0 !important;
+  margin: 0 4px !important;
+  border: none !important;
+  position: static !important;
+}
+
+.multiselect__placeholder {
+  color: #9ca3af !important; /* gray-400 */
+  font-size: 0.875rem !important;
+  line-height: 1.5rem !important;
+  padding: 0 !important;
+  margin: 0 4px !important;
+  position: static !important;
+  display: none !important; /* Ẩn placeholder để input hiển thị */
+}
+
+.multiselect__single {
+  font-size: 0.875rem !important;
+  color: #374151 !important; /* gray-700 */
+  background: transparent !important;
+  line-height: 1.5rem !important;
+  padding: 0 !important;
+  margin: 0 4px !important;
+  border: none !important;
+  outline: none !important;
+  flex-grow: 1 !important;
+  width: auto !important;
+  min-width: 120px !important;
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+}
+
+.multiselect__tag {
+  background: #e0f2fe !important; /* blue-100 */
+  color: #1e40af !important; /* blue-800 */
+  padding: 2px 6px !important;
+  margin: 2px 4px 2px 0 !important;
+  border-radius: 4px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  font-size: 0.75rem !important;
+  line-height: 1.25rem !important;
+  max-width: 150px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.multiselect__tag-icon {
+  background: #3b82f6 !important; /* blue-600 */
+  color: #ffffff !important;
+  border-radius: 50% !important;
+  width: 14px !important;
+  height: 14px !important;
+  line-height: 14px !important;
+  margin-left: 4px !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.multiselect__tag-icon:hover {
+  background: #1e40af !important; /* blue-800 */
+}
+
+.multiselect__select {
+  width: 24px !important;
+  right: 8px !important;
+  top: 50% !important; /* Căn giữa theo chiều dọc */
+  transform: translateY(-50%) !important; /* Dịch chuyển lên nửa chiều cao */
+  background: transparent !important;
+  padding: 0 !important;
+  z-index: 20 !important;
+  position: absolute !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+}
+
+.multiselect__select:before {
+  content: '' !important;
+  border: none !important;
+  background: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="%236b7280"%3E%3Cpath stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /%3E%3C/svg%3E') no-repeat center !important;
+  width: 16px !important;
+  height: 16px !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  transition: transform 0.2s ease !important;
+}
+
+.multiselect__select:after {
+  content: none !important;
+}
+
+.multiselect__select:hover:before {
+  transform: translate(-50%, -50%) scale(1.1) !important;
+}
+
+.multiselect__select::-webkit-inner-spin-button,
+.multiselect__select::-webkit-outer-spin-button,
+.multiselect__select::-ms-clear,
+.multiselect__select::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+.multiselect__select {
+  background-image: none !important;
+}
+
+.multiselect__content-wrapper {
+  overflow-y: auto !important;
+  max-height: calc(100vh - 200px) !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 0.375rem !important;
+  background: #ffffff !important;
+  position: absolute !important;
+  z-index: 5000 !important;
+  width: 100% !important;
+  top: 100% !important;
+  margin-top: 2px !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+  transition: opacity 0.2s ease, visibility 0.2s ease !important;
+  visibility: visible !important;
+}
+
+.multiselect__content-wrapper::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+.multiselect__content-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+  border-radius: 3px !important;
+}
+
+.multiselect__content-wrapper::-webkit-scrollbar-thumb {
+  background: #9ca3af !important;
+  border-radius: 3px !important;
+}
+
+.multiselect__content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #6b7280 !important;
+}
+
+.multiselect__content {
+  width: 100% !important;
+  display: block !important;
+}
+
+.multiselect__element {
+  display: block !important;
+}
+
+.multiselect__option {
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  color: #374151 !important;
+  transition: background-color 0.2s ease !important;
+  line-height: 1.5rem !important;
+  display: block !important;
+}
+
+.multiselect__option--highlight {
+  background: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+.multiselect__option--selected {
+  background: #e0f2fe !important;
+  color: #1e40af !important;
+  font-weight: 500 !important;
+}
+
+/* Đồng bộ input và select */
+input, select {
+  height: 40px !important;
+  font-size: 0.875rem !important;
+  padding: 0.5rem 0.75rem !important;
+  line-height: 1.5rem !important;
+  box-sizing: border-box !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 0.375rem !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+input:focus, select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
+}

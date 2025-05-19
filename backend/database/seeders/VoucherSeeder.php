@@ -2,49 +2,55 @@
 
 namespace Database\Seeders;
 
-use App\Models\Shop;
 use Illuminate\Database\Seeder;
-use Faker\Factory as Faker;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class VoucherSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
-    public function run()
+    public function run(): void
     {
-        $faker = Faker::create();
+        $voucherIds = [];
 
-        // Lấy danh sách shop và shipping partners
-        $shopIds = Shop::pluck('id')->toArray();
-        $shippingPartners = ['partner1', 'partner2', 'partner3'];
-
-        // Tạo 15 bản ghi vouchers
-        for ($i = 0; $i < 15; $i++) {
-            $voucherType = $faker->randomElement(['platform', 'shop', 'shipping', 'product']);
-            $shopId = $voucherType === 'shop' ? $faker->randomElement($shopIds) : null;
-            $shippingOnly = $voucherType === 'shipping' ? true : false;
-            $discountType = $faker->randomElement(['percentage', 'fixed']);
-            $discountValue = $discountType === 'percentage' ? $faker->numberBetween(5, 50) : $faker->randomFloat(2, 5, 100);
-
-            \App\Models\Voucher::create([
-                'code' => strtoupper($faker->unique()->lexify('VOUCHER_????')),
-                'discount_type' => $discountType,
-                'discount_value' => $discountValue,
-                'min_order_amount' => $faker->randomFloat(2, 10, 200),
-                'start_date' => $faker->dateTimeBetween('-1 month', 'now'),
-                'end_date' => $faker->dateTimeBetween('now', '+1 month'),
-                'usage_limited' => $faker->optional(0.7, null)->numberBetween(50, 500),
-                'used_count' => $faker->numberBetween(0, 50),
-                'voucher_type' => $voucherType,
-                'shop_id' => $shopId,
-                'shipping_only' => $shippingOnly,
-                'applicable_shipping_partners' => $shippingOnly ? json_encode($faker->randomElements($shippingPartners, 2)) : null,
-                'created_at' => $faker->dateTimeBetween('-3 months', 'now'),
-                'updated_at' => $faker->dateTimeBetween('-3 months', 'now'),
+        // Create 2 fixed shipping vouchers
+        for ($i = 1; $i <= 2; $i++) {
+            $id = DB::table('vouchers')->insertGetId([
+                'code' => strtoupper('SHIP' . Str::random(6)),
+                'discount_type' => ['percentage', 'fixed'][rand(0, 1)],
+                'discount_value' => rand(5, 50),
+                'min_order_amount' => rand(100, 500),
+                'start_date' => Carbon::now()->subDays(5),
+                'end_date' => Carbon::now()->addDays(30),
+                'usage_limit' => rand(10, 100),
+                'used_count' => 0,
+                'voucher_type' => 'shipping',
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
+            $voucherIds[] = $id;
         }
+
+        // Create 8 additional vouchers with random types (excluding shipping)
+        $otherVoucherTypes = ['platform', 'shop', 'product'];
+        for ($i = 1; $i <= 8; $i++) {
+            $id = DB::table('vouchers')->insertGetId([
+                'code' => strtoupper(Str::random(8)),
+                'discount_type' => ['percentage', 'fixed'][rand(0, 1)],
+                'discount_value' => rand(5, 50),
+                'min_order_amount' => rand(100, 500),
+                'start_date' => Carbon::now()->subDays(5),
+                'end_date' => Carbon::now()->addDays(30),
+                'usage_limit' => rand(10, 100),
+                'used_count' => 0,
+                'voucher_type' => $otherVoucherTypes[array_rand($otherVoucherTypes)],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $voucherIds[] = $id;
+        }
+
+        // Store voucher IDs for other seeders
+        config(['voucher_seeder.voucher_ids' => $voucherIds]);
     }
 }

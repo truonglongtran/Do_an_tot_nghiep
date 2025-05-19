@@ -31,6 +31,9 @@ const routes = [
       { path: 'admins', component: () => import('@/views/Admin/AdminAdmins.vue') },
       { path: 'products', component: () => import('@/views/Admin/AdminProducts.vue') },
       { path: 'orders', component: () => import('@/views/Admin/AdminOrders.vue') },
+      { path: 'disputes', component: () => import('@/views/Admin/AdminDisputes.vue') },
+      { path: 'vouchers', component: () => import('@/views/Admin/AdminVouchers.vue') },
+      { path: 'payments', component: () => import('@/views/Admin/AdminPayments.vue') },
     ]
   },
   
