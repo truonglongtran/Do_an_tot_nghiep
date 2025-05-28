@@ -34,9 +34,20 @@ const routes = [
       { path: 'disputes', component: () => import('@/views/Admin/AdminDisputes.vue') },
       { path: 'vouchers', component: () => import('@/views/Admin/AdminVouchers.vue') },
       { path: 'payments', component: () => import('@/views/Admin/AdminPayments.vue') },
+      { path: 'reviews', component: () => import('@/views/Admin/AdminReviews.vue'), 
+        children: [
+          {
+            path: ':shopId',
+            name: 'ShopReviews',
+            component: () => import('@/views/Admin/AdminShopReviews.vue')
+          }
+        ]
+      },
+      { path: 'reports', component: () => import('@/views/Admin/AdminReports.vue') },
+      { path: 'shipping-partners', component: () => import('@/views/Admin/AdminShippingPartners.vue') },
+      { path: 'banners', component: () => import('@/views/Admin/AdminBanners.vue') },
     ]
   },
-  
   {
     path: '/seller/dashboard',
     name: 'SellerDashboard',
@@ -62,14 +73,11 @@ router.beforeEach((to, from, next) => {
   const loginType = localStorage.getItem('loginType');
 
   if (to.meta.requiresAuth && !token) {
-    // Chuyển hướng đến trang đăng nhập dựa trên meta.loginPath
     const loginPath = to.meta.loginPath || '/buyer/login';
     next(loginPath);
   } else if (to.meta.requiresAuth) {
-    // Kiểm tra vai trò
     const allowedRoles = Array.isArray(to.meta.role) ? to.meta.role : [to.meta.role];
     if (!allowedRoles.includes(role)) {
-      // Chuyển hướng đến dashboard phù hợp với loginType
       if (loginType === 'admin') {
         next('/admin/dashboard');
       } else if (loginType === 'seller') {
