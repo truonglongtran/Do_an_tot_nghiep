@@ -5,6 +5,13 @@ use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\DisputeController;
+use App\Http\Controllers\Api\VoucherController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ShippingPartnerController;
+use App\Http\Controllers\Api\BannerController;
+use App\Http\Controllers\Api\ReviewController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +55,35 @@ Route::prefix('admin')->group(function () {
         Route::put('/orders/{id}/shipping-status', [OrderController::class, 'updateShippingStatus']);
         Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']);
         Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
+
+        Route::get('/disputes', [DisputeController::class, 'index']);
+        Route::get('/disputes/{id}', [DisputeController::class, 'show']);
+        Route::put('/disputes/{id}/status', [DisputeController::class, 'updateStatus']);
+        Route::delete('/disputes/{id}', [DisputeController::class, 'destroy']);
+
+        Route::apiResource('vouchers', VoucherController::class);
+
+        Route::get('shipping-partners', [ShippingPartnerController::class, 'index']);
+         Route::get('shipping-partners', [ShippingPartnerController::class, 'index']);
+        Route::get('shipping-partners/all', [ShippingPartnerController::class, 'all']);
+        Route::post('shipping-partners', [ShippingPartnerController::class, 'store']);
+        Route::get('shipping-partners/{id}', [ShippingPartnerController::class, 'show']);
+        Route::put('shipping-partners/{id}', [ShippingPartnerController::class, 'update']);
+        Route::delete('shipping-partners/{id}', [ShippingPartnerController::class, 'destroy']);
+
+        Route::get('/payments', [PaymentController::class, 'index']);
+        Route::post('/payments', [PaymentController::class, 'store']);
+        Route::get('/payments/{id}', [PaymentController::class, 'show']);
+        Route::put('/payments/{id}', [PaymentController::class, 'update']);
+        Route::delete('/payments/{id}', [PaymentController::class, 'destroy']);
+        Route::put('/payments/{id}/status', [PaymentController::class, 'updateStatus']);
+
+        Route::get('/reviews', [ReviewController::class, 'index']);
+        Route::get('/reviews/{shopId}', [ReviewController::class, 'showReviews']);
+
+        Route::get('/reports', [ReportController::class, 'index']);
+
+        Route::apiResource('/banners', BannerController::class);
     });
 });
 

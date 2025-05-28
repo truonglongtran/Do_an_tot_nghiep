@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/Shop.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,20 +22,40 @@ class Shop extends Model
         'phone_number',
     ];
 
+    protected $appends = ['review_count'];
+
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_id');
     }
 
-    // Mối quan hệ với ShippingPartner
-  public function shippingPartners()
+    public function shippingPartners()
     {
         return $this->belongsToMany(ShippingPartner::class, 'shop_shipping_partners');
     }
 
-
     public function products()
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function reviews()
+    {
+        return $this->hasManyThrough(Review::class, Product::class);
+    }
+
+    public function bannerPlacements()
+    {
+        return $this->hasMany(BannerPlacement::class);
+    }
+
+
+    public function getReviewCountAttribute()
+    {
+        // Temporary workaround to debug
+        return \DB::table('reviews')
+            ->join('products', 'reviews.product_id', '=', 'products.id')
+            ->where('products.shop_id', $this->id)
+            ->count();
     }
 }

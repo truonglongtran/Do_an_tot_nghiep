@@ -2,43 +2,36 @@
 
 namespace Database\Seeders;
 
-use App\Models\Order;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Faker\Factory as Faker;
 
 class PaymentSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
-    public function run()
+    public function run(): void
     {
         $faker = Faker::create();
 
-        // Lấy danh sách orders cùng với total_amount
-        $orders = Order::select('id', 'total_amount')->get();
+        // Lấy tất cả order_id từ bảng orders
+        $orderIds = DB::table('orders')->pluck('id')->toArray();
 
-        // Kiểm tra xem có orders hay không
-        if ($orders->isEmpty()) {
-            echo "Error: Please seed the orders table first.\n";
+        if (empty($orderIds)) {
+            \Illuminate\Support\Facades\Log::warning('No orders found. Please run OrderSeeder first.');
             return;
         }
 
-        // Tạo bản ghi payments cho mỗi order
-        foreach ($orders as $order) {
-            $paymentMethod = $faker->randomElement(['credit_card', 'bank_transfer', 'paypal', 'cash_on_delivery']);
-            $status = $faker->randomElement(['success', 'failed', 'refund']);
-
-            \App\Models\Payment::create([
-                'order_id' => $order->id,
-                'amount' => $order->total_amount, // Lấy từ total_amount của order
-                'payment_method' => $paymentMethod,
-                'status' => $status,
-                'created_at' => $faker->dateTimeBetween('-3 months', 'now'),
-                'updated_at' => $faker->dateTimeBetween('-3 months', 'now'),
-            ]);
+        $payments = [];
+        foreach ($orderIds as $orderId) {
+            $payments[] = [
+                'order_id' => $orderId,
+                'amount' => $faker->randomFloat(2, 100000, 10000000), // Số tiền từ 100,000 đến 10,000,000 VND
+                'payment_method' => $faker->randomElement(['cash', 'bank_transfer', 'credit_card', 'mobile_payment']),
+                'status' => $faker->randomElement(['success', 'failed', 'refund']),
+                'created_at' => $faker->dateTimeThisYear(),
+                'updated_at' => now(),
+            ];
         }
+
+        DB::table('payments')->insert($payments);
     }
 }

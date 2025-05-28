@@ -78,8 +78,9 @@
         { to: '/admin/disputes', label: 'Quản lý khiếu nại' },
         { to: '/admin/vouchers', label: 'Quản lý voucher/khuyến mãi' },
         { to: '/admin/payments', label: 'Quản lý thanh toán' },
+        { to: '/admin/reviews', label: 'Quản lý đánh giá' },
         { to: '/admin/reports', label: 'Quản lý báo cáo' },
-        { to: '/admin/shipping', label: 'Quản lý vận chuyển' },
+        { to: '/admin/shipping-partners', label: 'Quản lý vận chuyển' },
         { to: '/admin/banners', label: 'Quản lý banner' },
       ];
   
