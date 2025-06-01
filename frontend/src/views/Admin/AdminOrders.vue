@@ -79,7 +79,7 @@
           </td>
           <td class="px-4 py-2 border text-center">
             <button
-              @click="viewOrderDetails(order)"
+              @click="openDetailModal(order)"
               class="text-blue-600 hover:underline mr-2"
               :disabled="isUpdating"
             >
@@ -109,49 +109,13 @@
     />
 
     <!-- Modal chi tiết đơn hàng -->
-    <div
-      v-if="showOrderDetailsModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
-    >
-      <div class="bg-white p-6 rounded-lg max-w-2xl w-full">
-        <h2 class="text-xl font-bold mb-4">Chi tiết đơn hàng #{{ selectedOrder.id }}</h2>
-        <p><strong>Người mua:</strong> {{ selectedOrder.buyer?.email || 'N/A' }}</p>
-        <p><strong>Người bán:</strong> {{ selectedOrder.seller?.email || 'N/A' }}</p>
-        <p><strong>Tổng tiền:</strong> {{ formatCurrency(selectedOrder.total_amount) }}</p>
-        <p><strong>Thanh toán:</strong> {{ statusText.settled[selectedOrder.settled_status] }}</p>
-        <p><strong>Vận chuyển:</strong> {{ statusText.shipping[selectedOrder.shipping_status] }}</p>
-        <p><strong>Đơn hàng:</strong> {{ statusText.order[selectedOrder.order_status] }}</p>
-        <p><strong>Ngày tạo:</strong> {{ formatDate(selectedOrder.created_at) }}</p>
-        <h3 class="font-semibold mt-4">Sản phẩm</h3>
-        <table class="min-w-full border">
-          <thead>
-            <tr>
-              <th class="px-4 py-2 border">Sản phẩm</th>
-              <th class="px-4 py-2 border">Màu</th>
-              <th class="px-4 py-2 border">Kích cỡ</th>
-              <th class="px-4 py-2 border">Số lượng</th>
-              <th class="px-4 py-2 border">Giá</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in selectedOrder.items" :key="item.id">
-              <td class="px-4 py-2 border">{{ item.product?.name || 'N/A' }}</td>
-              <td class="px-4 py-2 border">{{ item.product_variant?.color || 'N/A' }}</td>
-              <td class="px-4 py-2 border">{{ item.product_variant?.size || 'N/A' }}</td>
-              <td class="px-4 py-2 border text-center">{{ item.quantity }}</td>
-              <td class="px-4 py-2 border text-right">{{ formatCurrency(item.product_variant?.price || 0) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <button
-          @click="showOrderDetailsModal = false"
-          class="mt-4 bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-          :disabled="isUpdating"
-        >
-          Đóng
-        </button>
-      </div>
-    </div>
+    <GenericDetailsModal
+      :show="showOrderDetailsModal"
+      :data="selectedOrder"
+      :fields="orderFields"
+      :title="`Chi tiết đơn hàng #${selectedOrder?.id || ''}`"
+      @close="closeDetailModal"
+    />
   </div>
 </template>
 
@@ -159,10 +123,11 @@
 import axios from 'axios';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
+import GenericDetailsModal from './component/GenericDetailsModal.vue';
 
 export default {
   name: 'AdminOrders',
-  components: { FilterSearch, ConfirmModal },
+  components: { FilterSearch, ConfirmModal, GenericDetailsModal },
   data() {
     return {
       orders: [],
@@ -200,6 +165,78 @@ export default {
       showOrderDetailsModal: false,
       selectedOrder: null,
       isUpdating: false,
+      orderFields: [
+        { label: 'Người mua', key: 'buyer.email', type: 'text' },
+        { label: 'Người bán', key: 'seller.email', type: 'text' },
+        {
+          label: 'Tổng tiền',
+          key: 'total_amount',
+          type: 'custom',
+          customFormat: (value) => this.formatCurrency(value),
+        },
+        {
+          label: 'Thanh toán',
+          key: 'settled_status',
+          type: 'custom',
+          customFormat: (value) => this.statusText.settled[value] || 'N/A',
+        },
+        {
+          label: 'Vận chuyển',
+          key: 'shipping_status',
+          type: 'custom',
+          customFormat: (value) => this.statusText.shipping[value] || 'N/A',
+        },
+        {
+          label: 'Đơn hàng',
+          key: 'order_status',
+          type: 'custom',
+          customFormat: (value) => this.statusText.order[value] || 'N/A',
+        },
+        {
+          label: 'Ngày tạo',
+          key: 'created_at',
+          type: 'date',
+        },
+        {
+          label: 'Sản phẩm',
+          key: 'items',
+          type: 'custom',
+          customFormat: (items) => {
+            if (!items || !Array.isArray(items) || items.length === 0) {
+              return 'Không có sản phẩm';
+            }
+            // Trả về HTML table như một chuỗi
+            return `
+              <table class="min-w-full border">
+                <thead>
+                  <tr>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Sản phẩm</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Màu</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Kích cỡ</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-center">Số lượng</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-right">Giá</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${items
+                    .map(
+                      (item) => `
+                        <tr>
+                          <td class="px-4 py-2 border">${item.product?.name || 'N/A'}</td>
+                          <td class="px-4 py-2 border">${item.product_variant?.color || 'N/A'}</td>
+                          <td class="px-4 py-2 border">${item.product_variant?.size || 'N/A'}</td>
+                          <td class="px-4 py-2 border text-center">${item.quantity || 0}</td>
+                          <td class="px-4 py-2 border text-right">${this.formatCurrency(item.product_variant?.price || 0)}</td>
+                        </tr>
+                      `
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            `;
+          },
+        },
+      ],
     };
   },
   computed: {
@@ -209,8 +246,8 @@ export default {
         { field: 'shipping_status', values: ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'] },
         { field: 'order_status', values: ['pending', 'paid', 'canceled'] },
       ];
-      const statusFilters = statusTypes.flatMap(type =>
-        type.values.map(value => ({
+      const statusFilters = statusTypes.flatMap((type) =>
+        type.values.map((value) => ({
           key: `${type.field}:${value}`,
           label: this.statusText[type.field.replace('_status', '')][value],
           count: this.filterCountByStatus(type.field, value),
@@ -223,7 +260,7 @@ export default {
     },
     filteredOrders() {
       const q = this.searchQuery.toLowerCase();
-      return this.allOrders.filter(order => {
+      return this.allOrders.filter((order) => {
         const matchQuery =
           (order.buyer?.email || '').toLowerCase().includes(q) ||
           (order.seller?.email || '').toLowerCase().includes(q);
@@ -248,8 +285,7 @@ export default {
         const response = await axios.get('http://localhost:8000/api/admin/orders', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log('Raw API Response:', response.data);
-        this.orders = response.data.map(order => {
+        this.orders = response.data.map((order) => {
           const settledStatus = order.settled_status && ['unsettled', 'settled'].includes(order.settled_status) ? order.settled_status : 'unsettled';
           const shippingStatus = order.shipping_status && ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'].includes(order.shipping_status) ? order.shipping_status : 'pending';
           const orderStatus = order.order_status && ['pending', 'paid', 'canceled'].includes(order.order_status) ? order.order_status : 'pending';
@@ -259,23 +295,14 @@ export default {
             shipping_status: shippingStatus,
             order_status: orderStatus,
           };
-          // Khởi tạo tempStatuses cho đơn hàng (thay this.$set)
           this.tempStatuses[order.id] = {
             settled_status: settledStatus,
             shipping_status: shippingStatus,
             order_status: orderStatus,
           };
-          console.log('Processed Order:', {
-            id: order.id,
-            settled_status: result.settled_status,
-            shipping_status: result.shipping_status,
-            order_status: result.order_status,
-            tempStatuses: this.tempStatuses[order.id],
-          });
           return result;
         });
         this.allOrders = [...this.orders];
-        console.log('Fetched Orders:', this.orders);
       } catch (error) {
         console.error('Lỗi khi tải danh sách đơn hàng:', error.response?.data || error.message);
         alert('Không thể tải danh sách đơn hàng.');
@@ -291,25 +318,18 @@ export default {
         if (!this.newStatus) {
           throw new Error('Trạng thái mới không hợp lệ');
         }
-        const payload = {
-          [this.statusField]: this.newStatus,
-        };
+        const payload = { [this.statusField]: this.newStatus };
         const endpoint = `http://localhost:8000/api/admin/orders/${order.id}/${this.statusField.replace('_status', '-status')}`;
-        console.log('Update Status Payload:', { orderId: order.id, endpoint, payload });
         const response = await axios.put(endpoint, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log('Update Status Response:', response.data);
-        // Cập nhật orders và allOrders
-        this.orders = this.orders.map(o => o.id === order.id ? { ...o, ...response.data.order } : o);
-        this.allOrders = this.allOrders.map(o => o.id === order.id ? { ...o, ...response.data.order } : o);
-        // Cập nhật tempStatuses (thay this.$set)
+        this.orders = this.orders.map((o) => (o.id === order.id ? { ...o, ...response.data.order } : o));
+        this.allOrders = this.allOrders.map((o) => (o.id === order.id ? { ...o, ...response.data.order } : o));
         this.tempStatuses[order.id][this.statusField] = this.newStatus;
         alert('Cập nhật trạng thái thành công');
       } catch (error) {
         console.error('Lỗi cập nhật trạng thái:', error.response?.data || error.message);
         alert('Cập nhật trạng thái thất bại: ' + (error.response?.data?.message || error.message));
-        // Khôi phục trạng thái tạm thời (thay this.$set)
         this.tempStatuses[order.id][this.statusField] = this.originalStatus;
       } finally {
         this.isUpdating = false;
@@ -322,9 +342,8 @@ export default {
         await axios.delete(`http://localhost:8000/api/admin/orders/${orderId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        this.orders = this.orders.filter(order => order.id !== orderId);
-        this.allOrders = this.allOrders.filter(order => order.id !== orderId);
-        // Xóa tempStatuses cho đơn hàng (thay this.$delete)
+        this.orders = this.orders.filter((order) => order.id !== orderId);
+        this.allOrders = this.allOrders.filter((order) => order.id !== orderId);
         delete this.tempStatuses[orderId];
         alert('Đã xóa đơn hàng thành công');
       } catch (error) {
@@ -335,32 +354,21 @@ export default {
       }
     },
     confirmUpdateStatus(order, field, newStatus) {
-      console.log('Confirm Update Status:', { orderId: order.id, field, newStatus, tempStatuses: this.tempStatuses[order.id] });
-      
-      // Bỏ qua nếu giá trị không hợp lệ hoặc không thay đổi
       if (!newStatus || newStatus === order[field]) {
-        console.log('No change or invalid status, ignoring:', { orderId: order.id, field, newStatus });
         this.tempStatuses[order.id][field] = order[field];
         return;
       }
-
-      // Chuẩn hóa newStatus
       newStatus = String(newStatus).trim().toLowerCase();
-
-      // Xác định danh sách trạng thái hợp lệ
       const validStatuses = {
         settled_status: ['unsettled', 'settled'],
         shipping_status: ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'],
         order_status: ['pending', 'paid', 'canceled'],
       }[field];
-
       if (!validStatuses.includes(newStatus)) {
-        alert(`Vui lòng chọn trạng thái hợp lệ cho ${this.getStatusLabel(field)}. Các giá trị hợp lệ: ${validStatuses.join(', ')}`);
+        alert(`Vui lòng chọn trạng thái hợp lệ cho ${this.getStatusLabel(field)}.`);
         this.tempStatuses[order.id][field] = order[field];
-        console.log('Invalid status detected:', { orderId: order.id, field, newStatus, validStatuses });
         return;
       }
-
       this.openConfirmModal('status', order, field, newStatus);
     },
     openConfirmModal(action, order, field = null, newStatus = null) {
@@ -375,7 +383,6 @@ export default {
         this.newStatus = newStatus;
         this.confirmTitle = 'Xác nhận đổi trạng thái';
         this.confirmMessage = `Bạn có chắc chắn muốn đổi trạng thái ${this.getStatusLabel(field)} của đơn hàng #${order.id} thành "${this.statusText[field.replace('_status', '')][newStatus]}" không?`;
-        console.log('Open Confirm Modal:', { action, orderId: order.id, field, newStatus, originalStatus: this.originalStatus });
       }
       this.showConfirmModal = true;
     },
@@ -389,7 +396,6 @@ export default {
     },
     handleCancel() {
       if (this.confirmAction === 'status' && this.confirmOrder) {
-        // Khôi phục trạng thái (thay this.$set)
         this.tempStatuses[this.confirmOrder.id][this.statusField] = this.originalStatus;
       }
       this.resetModal();
@@ -404,12 +410,16 @@ export default {
       this.newStatus = null;
       this.originalStatus = null;
     },
-    viewOrderDetails(order) {
-      this.selectedOrder = order;
+    openDetailModal(order) {
+      this.selectedOrder = { ...order };
       this.showOrderDetailsModal = true;
     },
+    closeDetailModal() {
+      this.showOrderDetailsModal = false;
+      this.selectedOrder = null;
+    },
     filterCountByStatus(field, value) {
-      return this.allOrders.filter(order => order[field] === value).length;
+      return this.allOrders.filter((order) => order[field] === value).length;
     },
     getStatusLabel(field) {
       return {
@@ -419,12 +429,11 @@ export default {
       }[field];
     },
     formatCurrency(amount) {
-      if (!amount || isNaN(amount)) {
-        return '0 ₫';
-      }
+      if (!amount || isNaN(amount)) return '0 ₫';
       return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     },
     formatDate(date) {
+      if (!date) return 'N/A';
       return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date));
     },
   },

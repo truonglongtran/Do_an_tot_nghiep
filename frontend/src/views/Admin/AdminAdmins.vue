@@ -16,12 +16,16 @@
         Thêm Admin
       </button>
     </div>
-    <AdminForm
+    <FormModal
       v-if="showFormModal"
-      :admin="editingAdmin"
       :show="showFormModal"
+      :title="editingAdmin ? 'Chỉnh sửa Admin' : 'Thêm Admin'"
+      :fields="adminFormFields"
+      :initialData="editingAdmin"
+      :isEdit="!!editingAdmin"
       @close="showFormModal = false"
       @submit="handleAdminFormSubmit"
+      ref="formModal"
     />
     <p v-if="filteredAdmins.length === 0" class="text-center text-gray-500">
       Không tìm thấy admin nào.
@@ -72,12 +76,12 @@
             </div>
           </td>
           <td class="px-4 py-2 border text-center">
-            <!-- <button
+            <button
               @click="openEditForm(admin)"
               class="text-blue-600 hover:underline mr-2"
             >
               Sửa
-            </button> -->
+            </button>
             <button
               @click="openConfirmModal('delete', admin)"
               class="text-red-600 hover:underline"
@@ -106,11 +110,11 @@
 import axios from 'axios';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
-import AdminForm from './AdminForm.vue';
+import FormModal from './component/FormModal.vue';
 
 export default {
   name: 'AdminAdmins',
-  components: { FilterSearch, ConfirmModal, AdminForm },
+  components: { FilterSearch, ConfirmModal, FormModal },
   data() {
     return {
       admins: [],
@@ -134,6 +138,48 @@ export default {
     };
   },
   computed: {
+    adminFormFields() {
+      return [
+        {
+          name: 'email',
+          label: 'Email',
+          type: 'email',
+          placeholder: 'Nhập email',
+          required: true,
+          rules: [
+            {
+              validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+              message: 'Email không hợp lệ',
+            },
+          ],
+        },
+        {
+          name: 'password',
+          label: 'Mật khẩu',
+          type: 'password',
+          placeholder: 'Nhập mật khẩu',
+          required: !this.editingAdmin,
+          rules: [
+            {
+              validator: (value) => !value || value.length >= 6,
+              message: 'Mật khẩu phải có ít nhất 6 ký tự',
+            },
+          ],
+        },
+        {
+          name: 'role',
+          label: 'Vai trò',
+          type: 'select',
+          options: this.roles.map((role) => ({
+            value: role,
+            label: role.charAt(0).toUpperCase() + role.slice(1),
+          })),
+          placeholder: 'Chọn vai trò',
+          required: true,
+          defaultValue: 'admin',
+        },
+      ];
+    },
     filters() {
       const statusFilters = [
         { key: 'all', label: 'Tất cả', count: this.allAdmins.length },
@@ -202,11 +248,15 @@ export default {
     },
     extractRoles(admins) {
       const set = new Set(admins.map((admin) => admin.role).filter(Boolean));
-      const roles = Array.from(set);
+      const roles = Array.from(set).filter(role => ['admin', 'moderator'].includes(role));
+      if (!roles.includes('admin')) {
+        roles.push('admin');
+      }
       console.log('Roles:', roles);
       return roles;
     },
     async handleAdminFormSubmit(form) {
+      console.log('Form data:', form);
       const token = localStorage.getItem('token');
       if (!token) {
         alert('Vui lòng đăng nhập lại.');
@@ -222,11 +272,11 @@ export default {
             )
           : await axios.post(
               'http://localhost:8000/api/admin/admins',
-              { ...form, status: 'active' },
+              { email: form.email, password: form.password, role: form.role },
               { headers: { Authorization: `Bearer ${token}` } }
             );
         if (this.editingAdmin) {
-          Object.assign(this.editingAdmin, response.data);
+          Object.assign(this.editingAdmin, response.data.admin || response.data);
         } else {
           this.admins.push({
             ...response.data,
@@ -238,22 +288,23 @@ export default {
         alert(this.editingAdmin ? 'Cập nhật admin thành công' : 'Thêm admin thành công');
       } catch (error) {
         console.error('Lỗi khi xử lý form admin:', error);
+        console.error('Response data:', error.response?.data);
         if (error.response?.status === 422) {
-          const errors = error.response.data.errors;
+          const errors = error.response.data.details || error.response.data.errors;
           let errorMessage = 'Lỗi xác thực:\n';
           for (const field in errors) {
             errorMessage += `- ${field}: ${errors[field].join(', ')}\n`;
           }
           alert(errorMessage);
         } else {
-          alert('Lỗi: ' + (error.response?.data?.error || error.message));
+          alert('Lỗi server: ' + (error.response?.data?.error || error.message));
         }
       }
     },
     async updateStatus(admin) {
       const token = localStorage.getItem('token');
       try {
-        const response = await axios.put(
+        await axios.put(
           `http://localhost:8000/api/admin/admins/${admin.id}/status`,
           { status: this.newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
@@ -265,6 +316,20 @@ export default {
         console.error('Lỗi cập nhật trạng thái:', error);
         alert('Cập nhật trạng thái thất bại: ' + (error.response?.data?.error || error.message));
         admin.tempStatus = this.originalStatus === 'active';
+      }
+    },
+    async deleteAdmin(adminId) {
+      const token = localStorage.getItem('token');
+      try {
+        await axios.delete(`http://localhost:8000/api/admin/admins/${adminId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        this.admins = this.admins.filter((admin) => admin.id !== adminId);
+        this.allAdmins = this.allAdmins.filter((admin) => admin.id !== adminId);
+        alert('Đã xóa admin thành công');
+      } catch (error) {
+        console.error('Lỗi khi xóa admin:', error);
+        alert('Xóa admin thất bại: ' + (error.response?.data?.error || error.message));
       }
     },
     confirmToggleStatus(admin) {
@@ -313,11 +378,21 @@ export default {
     openAddForm() {
       this.editingAdmin = null;
       this.showFormModal = true;
+      if (this.$refs.formModal) {
+        this.$refs.formModal.initializeForm({});
+      }
     },
-    // openEditForm(admin) {
-    //   this.editingAdmin = { ...admin };
-    //   this.showFormModal = true;
-    // },
+    openEditForm(admin) {
+      this.editingAdmin = {
+        id: admin.id,
+        email: admin.email || '',
+        role: admin.role || 'admin',
+      };
+      this.showFormModal = true;
+      if (this.$refs.formModal) {
+        this.$refs.formModal.initializeForm(this.editingAdmin);
+      }
+    },
     applySearch() {
       console.log('Apply Admin Search:', this.searchQuery);
     },
@@ -330,20 +405,6 @@ export default {
       const count = this.allAdmins.filter((admin) => admin.role === role).length;
       console.log(`Count Role (${role}):`, count);
       return count;
-    },
-    async deleteAdmin(adminId) {
-      const token = localStorage.getItem('token');
-      try {
-        await axios.delete(`http://localhost:8000/api/admin/admins/${adminId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        this.admins = this.admins.filter((admin) => admin.id !== adminId);
-        this.allAdmins = this.allAdmins.filter((admin) => admin.id !== adminId);
-        alert('Đã xóa admin thành công');
-      } catch (error) {
-        console.error('Lỗi khi xóa admin:', error);
-        alert('Xóa admin thất bại');
-      }
     },
   },
 };

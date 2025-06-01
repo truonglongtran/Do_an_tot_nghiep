@@ -16,10 +16,13 @@
         Thêm người dùng
       </button>
     </div>
-    <UserForm
+    <FormModal
       v-if="showFormModal"
-      :user="editingUser"
       :show="showFormModal"
+      :title="editingUser ? 'Chỉnh sửa người dùng' : 'Thêm người dùng'"
+      :fields="userFormFields"
+      :initialData="editingUser"
+      :isEdit="!!editingUser"
       @close="showFormModal = false"
       @submit="handleUserFormSubmit"
     />
@@ -100,11 +103,11 @@
 import axios from 'axios';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
-import UserForm from './UserForm.vue';
+import FormModal from './component/FormModal.vue';
 
 export default {
   name: 'AdminUsers',
-  components: { FilterSearch, ConfirmModal, UserForm },
+  components: { FilterSearch, ConfirmModal, FormModal },
   data() {
     return {
       users: [],
@@ -128,6 +131,35 @@ export default {
     };
   },
   computed: {
+    userFormFields() {
+      return [
+        {
+          name: 'email',
+          label: 'Email',
+          type: 'email',
+          placeholder: 'Email',
+          required: true,
+        },
+        {
+          name: 'password',
+          label: 'Mật khẩu',
+          type: 'password',
+          placeholder: 'Mật khẩu',
+          required: !this.editingUser,
+        },
+        {
+          name: 'role',
+          label: 'Vai trò',
+          type: 'select',
+          options: this.roles.map((role) => ({
+            value: role,
+            label: role.charAt(0).toUpperCase() + role.slice(1),
+          })),
+          placeholder: 'Chọn vai trò',
+          required: true,
+        },
+      ];
+    },
     filters() {
       const statusFilters = [
         { key: 'all', label: 'Tất cả', count: this.allUsers.length },
@@ -177,9 +209,9 @@ export default {
         const response = await axios.get('http://localhost:8000/api/admin/users', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        this.users = response.data.map(user => ({
+        this.users = response.data.map((user) => ({
           ...user,
-          tempStatus: user.status === 'active'
+          tempStatus: user.status === 'active',
         }));
         this.allUsers = this.users;
         this.roles = this.extractRoles(response.data);
@@ -224,12 +256,16 @@ export default {
         } else {
           this.users.push({
             ...response.data,
-            tempStatus: response.data.status === 'active'
+            tempStatus: response.data.status === 'active',
           });
           this.allUsers = [...this.users];
         }
         this.showFormModal = false;
-        alert(this.editingUser ? 'Cập nhật người dùng thành công' : 'Thêm người dùng thành công');
+        alert(
+          this.editingUser
+            ? 'Cập nhật người dùng thành công'
+            : 'Thêm người dùng thành công'
+        );
       } catch (error) {
         console.error('Lỗi khi xử lý form người dùng:', error);
         if (error.response?.status === 422) {

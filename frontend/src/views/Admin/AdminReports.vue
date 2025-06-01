@@ -1,6 +1,6 @@
 <template>
   <div class="p-8 space-y-6">
-    <div class=" mx-auto">
+    <div class="mx-auto">
       <h2 class="text-2xl font-bold text-gray-800 mb-6">
         Quản lý báo cáo
       </h2>
@@ -35,9 +35,10 @@
             <td class="p-3 border-b">{{ index + 1 }}</td>
             <td class="p-3 border-b">{{ report.report_type || 'N/A' }}</td>
             <td class="p-3 border-b">
-              <a :href="report.file_url" target="_blank" class="text-blue-600 hover:underline">
+              <a v-if="report.file_url" :href="report.file_url" target="_blank" class="text-blue-600 hover:underline">
                 Tải xuống
               </a>
+              <span v-else>N/A</span>
             </td>
             <td class="p-3 border-b">{{ formatDate(report.created_at) }}</td>
             <td class="p-3 border-b text-center">
@@ -54,59 +55,24 @@
     </div>
 
     <!-- Modal for Report Details -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      @click.self="closeReportModal"
-    >
-      <div class="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative">
-        <button
-          @click="closeReportModal"
-          class="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        <h3 class="text-xl font-bold text-gray-800 mb-4">
-          Chi tiết báo cáo
-        </h3>
-        <div v-if="selectedReport" class="space-y-4">
-          <div>
-            <h4 class="text-md font-semibold text-gray-700">Loại báo cáo</h4>
-            <p class="text-gray-600">{{ selectedReport.report_type || 'N/A' }}</p>
-          </div>
-          <div>
-            <h4 class="text-md font-semibold text-gray-700">URL tệp</h4>
-            <a :href="selectedReport.file_url" target="_blank" class="text-blue-600 hover:underline">
-              Tải xuống
-            </a>
-          </div>
-          <div>
-            <h4 class="text-md font-semibold text-gray-700">Ngày tạo</h4>
-            <p class="text-gray-600">{{ formatDate(selectedReport.created_at) }}</p>
-          </div>
-        </div>
-        <div class="mt-6 flex justify-end">
-          <button
-            @click="closeReportModal"
-            class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-          >
-            Đóng
-          </button>
-        </div>
-      </div>
-    </div>
+    <GenericDetailsModal
+      :show="showModal"
+      :data="selectedReport"
+      :fields="reportFields"
+      title="Chi tiết báo cáo"
+      @close="closeReportModal"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import FilterSearch from './component/AdminFilterSearch.vue';
+import GenericDetailsModal from './component/GenericDetailsModal.vue';
 
 export default {
   name: 'AdminReports',
-  components: { FilterSearch },
+  components: { FilterSearch, GenericDetailsModal },
   data() {
     return {
       reports: [],
@@ -118,6 +84,11 @@ export default {
       endDate: '',
       showModal: false,
       selectedReport: null,
+      reportFields: [
+        { label: 'Loại báo cáo', key: 'report_type', type: 'text' },
+        { label: 'URL tệp', key: 'file_url', type: 'link' },
+        { label: 'Ngày tạo', key: 'created_at', type: 'date' },
+      ],
     };
   },
   computed: {
@@ -165,6 +136,7 @@ export default {
         }
         const params = {};
         if (this.reportTypeFilter !== 'all') params.report_type = this.reportTypeFilter;
+        if (this.searchQuery) params.file_url = this.searchQuery;
         if (this.startDate) params.start_date = this.startDate;
         if (this.endDate) params.end_date = this.endDate;
         const response = await axios.get('http://localhost:8000/api/admin/reports', {
@@ -186,17 +158,19 @@ export default {
     },
     formatDate(date) {
       if (!date) return 'N/A';
-      return new Date(date).toLocaleDateString('vi-VN', {
+      return new Date(date).toLocaleString('vi-VN', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
       });
     },
     applySearch() {
       this.fetchReports();
     },
     openReportModal(report) {
-      this.selectedReport = report;
+      this.selectedReport = { ...report };
       this.showModal = true;
     },
     closeReportModal() {

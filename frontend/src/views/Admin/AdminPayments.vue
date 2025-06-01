@@ -10,13 +10,12 @@
         @search="applySearch"
       />
     </div>
-    <PaymentForm
-      v-if="showFormModal"
-      :payment="editingPayment"
-      :show="showFormModal"
-      :readOnly="isViewMode"
-      @close="showFormModal = false"
-      @submit="handlePaymentFormSubmit"
+    <GenericDetailsModal
+      :show="showDetailModal"
+      :data="selectedPayment"
+      :fields="paymentFields"
+      title="Chi tiết thanh toán"
+      @close="closeDetailModal"
     />
     <p v-if="filteredPayments.length === 0" class="text-center text-gray-500">
       Không tìm thấy thanh toán nào.
@@ -57,7 +56,7 @@
           </td>
           <td class="px-4 py-2 border text-center space-x-2">
             <button
-              @click="openViewDetails(payment)"
+              @click="openDetailModal(payment)"
               class="text-blue-600 hover:underline"
             >
               Chi tiết
@@ -96,11 +95,11 @@
 import axios from 'axios';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
-import PaymentForm from './component/PaymentForm.vue';
+import GenericDetailsModal from './component/GenericDetailsModal.vue';
 
 export default {
   name: 'AdminPayments',
-  components: { FilterSearch, ConfirmModal, PaymentForm },
+  components: { FilterSearch, ConfirmModal, GenericDetailsModal },
   data() {
     return {
       payments: [],
@@ -123,6 +122,24 @@ export default {
       showFormModal: false,
       editingPayment: null,
       isViewMode: false,
+      showDetailModal: false,
+      selectedPayment: null,
+      paymentFields: [
+        { label: 'ID Đơn hàng', key: 'order_id', type: 'text' },
+        {
+          label: 'Số tiền',
+          key: 'amount',
+          type: 'custom',
+          customFormat: (value) => this.formatAmount(value),
+        },
+        { label: 'Phương thức', key: 'payment_method', type: 'text' },
+        {
+          label: 'Trạng thái',
+          key: 'status',
+          type: 'custom',
+          customFormat: (value) => this.statusText[value] || 'N/A',
+        },
+      ],
     };
   },
   computed: {
@@ -140,14 +157,11 @@ export default {
         label: m.charAt(0).toUpperCase() + m.slice(1),
         count: this.filterCountByMethod(m),
       }));
-      const filters = [...statusFilters, ...methodFilters];
-      console.log('Payment Filters:', filters);
-      return filters;
+      return [...statusFilters, ...methodFilters];
     },
     filteredPayments() {
       const q = this.searchQuery.toLowerCase();
-      console.log('Filtering Payments:', q, 'Filter:', this.currentFilter);
-      const result = this.allPayments.filter((payment) => {
+      return this.allPayments.filter((payment) => {
         const matchQuery = String(payment.order_id || '').toLowerCase().includes(q);
         const matchFilter =
           this.currentFilter === 'all' ||
@@ -155,8 +169,6 @@ export default {
           payment.payment_method === this.currentFilter;
         return matchQuery && matchFilter;
       });
-      console.log('Filtered Payments:', result);
-      return result;
     },
   },
   async mounted() {
@@ -165,7 +177,6 @@ export default {
   methods: {
     async fetchPayments() {
       const token = localStorage.getItem('token');
-      console.log('Token:', token);
       try {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
@@ -183,9 +194,6 @@ export default {
         }));
         this.allPayments = this.payments;
         this.paymentMethods = this.extractPaymentMethods(response.data);
-        console.log('Payments:', this.payments);
-        console.log('All Payments:', this.allPayments);
-        console.log('Payment Methods:', this.paymentMethods);
       } catch (error) {
         console.error('Lỗi khi tải danh sách thanh toán:', error);
         alert('Không thể tải danh sách thanh toán.');
@@ -196,39 +204,7 @@ export default {
     },
     extractPaymentMethods(payments) {
       const set = new Set(payments.map((payment) => payment.payment_method).filter(Boolean));
-      const methods = Array.from(set);
-      console.log('Payment Methods:', methods);
-      return methods;
-    },
-    async handlePaymentFormSubmit(form) {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Vui lòng đăng nhập lại.');
-        this.$router.push('/admin/login');
-        return;
-      }
-      try {
-        const response = await axios.put(
-          `http://localhost:8000/api/admin/payments/${this.editingPayment.id}`,
-          form,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        Object.assign(this.editingPayment, response.data);
-        this.showFormModal = false;
-        alert('Cập nhật thanh toán thành công');
-      } catch (error) {
-        console.error('Lỗi khi xử lý form thanh toán:', error);
-        if (error.response?.status === 422) {
-          const errors = error.response.data.errors;
-          let errorMessage = 'Lỗi xác thực:\n';
-          for (const field in errors) {
-            errorMessage += `- ${field}: ${errors[field].join(', ')}\n`;
-          }
-          alert(errorMessage);
-        } else {
-          alert('Lỗi: ' + (error.response?.data?.message || error.message));
-        }
-      }
+      return Array.from(set);
     },
     async updateStatus(payment) {
       const token = localStorage.getItem('token');
@@ -305,16 +281,13 @@ export default {
       this.newStatus = null;
       this.originalStatus = null;
     },
-    openViewDetails(payment) {
-      this.editingPayment = {
-        id: payment.id,
-        order_id: payment.order_id || '',
-        amount: payment.amount || null,
-        payment_method: payment.payment_method || '',
-        status: payment.status || '',
-      };
-      this.isViewMode = true;
-      this.showFormModal = true;
+    openDetailModal(payment) {
+      this.selectedPayment = { ...payment };
+      this.showDetailModal = true;
+    },
+    closeDetailModal() {
+      this.showDetailModal = false;
+      this.selectedPayment = null;
     },
     openEditForm(payment) {
       this.editingPayment = {
@@ -324,24 +297,20 @@ export default {
         payment_method: payment.payment_method || '',
         status: payment.status || '',
       };
-      console.log('Opening edit form with payment:', this.editingPayment);
       this.isViewMode = false;
       this.showFormModal = true;
     },
     applySearch() {
-      console.log('Apply Payment Search:', this.searchQuery);
+      // Filtering handled by filteredPayments computed property
     },
     filterCountByStatus(status) {
-      const count = this.allPayments.filter((payment) => payment.status === status).length;
-      console.log(`Count Status (${status}):`, count);
-      return count;
+      return this.allPayments.filter((payment) => payment.status === status).length;
     },
     filterCountByMethod(method) {
-      const count = this.allPayments.filter((payment) => payment.payment_method === method).length;
-      console.log(`Count Method (${method}):`, count);
-      return count;
+      return this.allPayments.filter((payment) => payment.payment_method === method).length;
     },
     formatAmount(amount) {
+      if (amount == null) return 'N/A';
       return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
     },
   },
