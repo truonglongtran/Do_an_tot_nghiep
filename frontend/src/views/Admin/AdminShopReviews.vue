@@ -75,80 +75,24 @@
     </div>
 
     <!-- Modal for Review Details -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      @click.self="closeReviewModal"
-    >
-      <div class="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 relative">
-        <button
-          @click="closeReviewModal"
-          class="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        <h3 class="text-xl font-bold text-gray-800 mb-4">
-          Chi tiết đánh giá
-        </h3>
-        <div v-if="selectedReview" class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h4 class="text-md font-semibold text-gray-700">Người đánh giá</h4>
-              <p class="text-gray-600">{{ selectedReview.buyer?.email || 'N/A' }}</p>
-            </div>
-            <div>
-              <h4 class="text-md font-semibold text-gray-700">Sản phẩm</h4>
-              <p class="text-gray-600">{{ selectedReview.product?.name || 'N/A' }}</p>
-            </div>
-            <div>
-              <h4 class="text-md font-semibold text-gray-700">Điểm số</h4>
-              <p class="text-gray-600">{{ selectedReview.rating || 'N/A' }}</p>
-            </div>
-            <div>
-              <h4 class="text-md font-semibold text-gray-700">Ngày tạo</h4>
-              <p class="text-gray-600">{{ formatDate(selectedReview.created_at) }}</p>
-            </div>
-          </div>
-          <div>
-            <h4 class="text-md font-semibold text-gray-700">Bình luận</h4>
-            <p class="text-gray-600">{{ selectedReview.comment || 'N/A' }}</p>
-          </div>
-          <div>
-            <h4 class="text-md font-semibold text-gray-700">Hình ảnh</h4>
-            <div v-if="selectedReview.images && parseImages(selectedReview.images).length > 0" class="flex flex-wrap gap-4">
-              <img
-                v-for="(image, imgIndex) in parseImages(selectedReview.images)"
-                :key="imgIndex"
-                :src="image"
-                alt="Review Image"
-                class="w-24 h-24 object-cover rounded"
-              />
-            </div>
-            <p v-else class="text-gray-600">Không có hình ảnh</p>
-          </div>
-        </div>
-        <div class="mt-6 flex justify-end">
-          <button
-            @click="closeReviewModal"
-            class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-          >
-            Đóng
-          </button>
-        </div>
-      </div>
-    </div>
+    <GenericDetailsModal
+      :show="showModal"
+      :data="selectedReview"
+      :fields="reviewFields"
+      title="Chi tiết đánh giá"
+      @close="closeReviewModal"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import FilterSearch from './component/AdminFilterSearch.vue';
+import GenericDetailsModal from './component/GenericDetailsModal.vue';
 
 export default {
   name: 'AdminShopReviews',
-  components: { FilterSearch },
+  components: { FilterSearch, GenericDetailsModal },
   data() {
     return {
       reviews: [],
@@ -160,6 +104,22 @@ export default {
       endDate: '',
       showModal: false,
       selectedReview: null,
+      reviewFields: [
+        { label: 'Người đánh giá', key: 'buyer.email', type: 'text' },
+        { label: 'Sản phẩm', key: 'product.name', type: 'text' },
+        { label: 'Điểm số', key: 'rating', type: 'text' },
+        { label: 'Bình luận', key: 'comment', type: 'text' },
+        {
+          label: 'Hình ảnh',
+          key: 'images',
+          type: 'custom',
+          customFormat: (images) => {
+            const parsedImages = this.parseImages(images);
+            return parsedImages.length > 0 ? parsedImages : ['Không có hình ảnh'];
+          },
+        },
+        { label: 'Ngày tạo', key: 'created_at', type: 'date' },
+      ],
     };
   },
   computed: {
@@ -253,17 +213,19 @@ export default {
     },
     formatDate(date) {
       if (!date) return 'N/A';
-      return new Date(date).toLocaleDateString('vi-VN', {
+      return new Date(date).toLocaleString('vi-VN', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
       });
     },
     applySearch() {
       // Filtering handled by filteredReviews computed property
     },
     openReviewModal(review) {
-      this.selectedReview = review;
+      this.selectedReview = { ...review };
       this.showModal = true;
     },
     closeReviewModal() {

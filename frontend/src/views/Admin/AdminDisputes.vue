@@ -60,12 +60,6 @@
               Chi tiết
             </button>
             <button
-              @click="openEditModal(dispute)"
-              class="text-yellow-600 hover:underline"
-            >
-              Sửa
-            </button>
-            <button
               @click="openConfirmModal('delete', dispute)"
               class="text-red-600 hover:underline"
             >
@@ -88,18 +82,12 @@
     />
 
     <!-- Modal chi tiết -->
-    <DetailsModal
+    <GenericDetailsModal
       :show="showDetailsModal"
-      :dispute="selectedDispute"
+      :data="selectedDispute"
+      :fields="disputeFields"
+      title="Chi tiết khiếu nại"
       @close="closeDetailsModal"
-    />
-
-    <!-- Modal sửa admin note -->
-    <EditNoteModal
-      :show="showEditModal"
-      :dispute="selectedDispute"
-      @close="showEditModal = false"
-      @submit="handleEditNoteSubmit"
     />
   </div>
 </template>
@@ -108,12 +96,11 @@
 import axios from 'axios';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
-import DetailsModal from './component/DisputeDetailsModal.vue';
-import EditNoteModal from './component/DisputeEditNoteModal.vue';
+import GenericDetailsModal from './component/GenericDetailsModal.vue';
 
 export default {
   name: 'AdminDisputes',
-  components: { FilterSearch, ConfirmModal, DetailsModal, EditNoteModal },
+  components: { FilterSearch, ConfirmModal, GenericDetailsModal },
   data() {
     return {
       disputes: [],
@@ -133,8 +120,23 @@ export default {
       newStatus: null,
       originalStatus: null,
       showDetailsModal: false,
-      showEditModal: false,
       selectedDispute: null,
+      disputeFields: [
+        { label: 'ID', key: 'id', type: 'text' },
+        { label: 'Mã đơn hàng', key: 'order_id', type: 'text' },
+        { label: 'Người mua', key: 'buyer.email', type: 'text' },
+        { label: 'Người bán', key: 'seller.email', type: 'text' },
+        { label: 'Lý do', key: 'reason', type: 'text' },
+        {
+          label: 'Trạng thái',
+          key: 'status',
+          type: 'custom',
+          customFormat: (value) => this.statusText[value] || 'N/A',
+        },
+        { label: 'Ghi chú quản trị', key: 'admin_note', type: 'text' },
+        { label: 'Ngày tạo', key: 'created_at', type: 'date' },
+        { label: 'Ngày cập nhật', key: 'updated_at', type: 'date' },
+      ],
     };
   },
   computed: {
@@ -287,14 +289,6 @@ export default {
     closeDetailsModal() {
       this.showDetailsModal = false;
       this.selectedDispute = null;
-    },
-    openEditModal(dispute) {
-      this.selectedDispute = dispute;
-      this.showEditModal = true;
-    },
-    async handleEditNoteSubmit(note) {
-      await this.updateAdminNote(this.selectedDispute, note);
-      this.showEditModal = false;
     },
     applySearch() {
       console.log('Apply Dispute Search:', this.searchQuery);
