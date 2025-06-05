@@ -22,68 +22,93 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::prefix('admin')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 
-    Route::middleware(['auth:sanctum'])->group(function () {
+    Route::middleware(['auth:sanctum', 'role:superadmin,admin,moderator'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
 
-        Route::get('/admins', [AdminController::class, 'index']); // Lấy danh sách admin
-        Route::post('/admins', [AdminController::class, 'store']); // Thêm admin
-        Route::get('/admins/{id}', [AdminController::class, 'show']); // Lấy admin cụ thể
-        Route::put('/admins/{id}', [AdminController::class, 'update']); // Sửa admin
-        Route::delete('/admins/{id}', [AdminController::class, 'destroy']); // Xóa admin
-        Route::put('/admins/{id}/status', [AdminController::class, 'updateStatus']); // Cập nhật trạng thái admin
+        // Admin management (only superadmin)
+        Route::middleware('role:superadmin')->group(function () {
+            Route::get('/admins', [AdminController::class, 'index'])->name('admins.index');
+            Route::post('/admins', [AdminController::class, 'store'])->name('admins.store');
+            Route::get('/admins/{id}', [AdminController::class, 'show'])->name('admins.show');
+            Route::put('/admins/{id}', [AdminController::class, 'update'])->name('admins.update');
+            Route::delete('/admins/{id}', [AdminController::class, 'destroy'])->name('admins.destroy');
+            Route::put('/admins/{id}/status', [AdminController::class, 'updateStatus'])->name('admins.updateStatus');
+        });
 
-        Route::get('/users', [UserController::class, 'index']);
-        Route::post('/users', [UserController::class, 'store']); // Thêm người dùng
-        Route::get('/users/{id}', [UserController::class, 'show']); // Lấy user cụ thể
-        Route::put('/users/{id}', [UserController::class, 'update']); // Sửa người dùng
-        Route::delete('/users/{id}', [UserController::class, 'destroy']); // Xóa người dùng
-        Route::put('/users/{id}/status', [UserController::class, 'updateStatus']); // Cập nhật trạng thái
+        // User management
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::get('/users/{id}', [UserController::class, 'show'])->name('users.show');
+        Route::put('/users/{id}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
+        Route::put('/users/{id}/status', [UserController::class, 'updateStatus'])->name('users.updateStatus');
 
-        Route::get('/shops', [ShopController::class, 'index']);
-        Route::put('/shops/{shop}/status', [ShopController::class, 'updateStatus']);
-        Route::delete('/shops/{shop}', [ShopController::class, 'destroy']);
+        // Shop management
+        Route::get('/shops', [ShopController::class, 'index'])->name('shops.index');
+        Route::put('/shops/{shop}/status', [ShopController::class, 'updateStatus'])->name('shops.updateStatus');
+        Route::delete('/shops/{shop}', [ShopController::class, 'destroy'])->name('shops.destroy');
 
-        Route::get('/products', [ProductController::class, 'index']);
-        Route::get('/products/{id}', [ProductController::class, 'show']);
-        Route::patch('/products/{id}/status', [ProductController::class, 'updateStatus']);
-        Route::patch('/variants/{id}/status', [ProductController::class, 'updateVariantStatus']);
-        Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+        // Product management
+        Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+        Route::get('/products/{id}', [ProductController::class, 'show'])->name('products.show');
+        Route::patch('/products/{id}/status', [ProductController::class, 'updateStatus'])->name('products.updateStatus');
+        Route::patch('/variants/{id}/status', [ProductController::class, 'updateVariantStatus'])->name('variants.updateStatus');
+        Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 
-        Route::get('/orders', [OrderController::class, 'index']);
-        Route::get('/orders/{id}', [OrderController::class, 'show']);
-        Route::put('/orders/{id}/settled-status', [OrderController::class, 'updateSettledStatus']);
-        Route::put('/orders/{id}/shipping-status', [OrderController::class, 'updateShippingStatus']);
-        Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']);
-        Route::delete('/orders/{id}', [OrderController::class, 'destroy']);
+        // Order management
+        Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/{id}', [OrderController::class, 'show'])->name('orders.show');
+        Route::put('/orders/{id}/settled-status', [OrderController::class, 'updateSettledStatus'])->name('orders.updateSettledStatus');
+        Route::put('/orders/{id}/shipping-status', [OrderController::class, 'updateShippingStatus'])->name('orders.updateShippingStatus');
+        Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus'])->name('orders.updateOrderStatus');
+        Route::delete('/orders/{id}', [OrderController::class, 'destroy'])->name('orders.destroy');
 
-        Route::get('/disputes', [DisputeController::class, 'index']);
-        Route::get('/disputes/{id}', [DisputeController::class, 'show']);
-        Route::put('/disputes/{id}/status', [DisputeController::class, 'updateStatus']);
-        Route::delete('/disputes/{id}', [DisputeController::class, 'destroy']);
+        // Dispute management
+        Route::get('/disputes', [DisputeController::class, 'index'])->name('disputes.index');
+        Route::get('/disputes/{id}', [DisputeController::class, 'show'])->name('disputes.show');
+        Route::put('/disputes/{id}/status', [DisputeController::class, 'updateStatus'])->name('disputes.updateStatus');
+        Route::delete('/disputes/{id}', [DisputeController::class, 'destroy'])->name('disputes.destroy');
 
-        Route::apiResource('vouchers', VoucherController::class);
+        // Voucher management
+        Route::apiResource('vouchers', VoucherController::class)->names([
+            'index' => 'vouchers.index',
+            'store' => 'vouchers.store',
+            'show' => 'vouchers.show',
+            'update' => 'vouchers.update',
+            'destroy' => 'vouchers.destroy',
+        ]);
 
-        Route::get('shipping-partners', [ShippingPartnerController::class, 'index']);
-         Route::get('shipping-partners', [ShippingPartnerController::class, 'index']);
-        Route::get('shipping-partners/all', [ShippingPartnerController::class, 'all']);
-        Route::post('shipping-partners', [ShippingPartnerController::class, 'store']);
-        Route::get('shipping-partners/{id}', [ShippingPartnerController::class, 'show']);
-        Route::put('shipping-partners/{id}', [ShippingPartnerController::class, 'update']);
-        Route::delete('shipping-partners/{id}', [ShippingPartnerController::class, 'destroy']);
+        // Shipping partner management
+        Route::get('shipping-partners', [ShippingPartnerController::class, 'index'])->name('shipping-partners.index');
+        Route::get('shipping-partners/all', [ShippingPartnerController::class, 'all'])->name('shipping-partners.all');
+        Route::post('shipping-partners', [ShippingPartnerController::class, 'store'])->name('shipping-partners.store');
+        Route::get('shipping-partners/{id}', [ShippingPartnerController::class, 'show'])->name('shipping-partners.show');
+        Route::put('shipping-partners/{id}', [ShippingPartnerController::class, 'update'])->name('shipping-partners.update');
+        Route::delete('shipping-partners/{id}', [ShippingPartnerController::class, 'destroy'])->name('shipping-partners.destroy');
 
-        Route::get('/payments', [PaymentController::class, 'index']);
-        Route::post('/payments', [PaymentController::class, 'store']);
-        Route::get('/payments/{id}', [PaymentController::class, 'show']);
-        Route::put('/payments/{id}', [PaymentController::class, 'update']);
-        Route::delete('/payments/{id}', [PaymentController::class, 'destroy']);
-        Route::put('/payments/{id}/status', [PaymentController::class, 'updateStatus']);
+        // Payment management
+        Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
+        Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
+        Route::get('/payments/{id}', [PaymentController::class, 'show'])->name('payments.show');
+        Route::put('/payments/{id}', [PaymentController::class, 'update'])->name('payments.update');
+        Route::delete('/payments/{id}', [PaymentController::class, 'destroy'])->name('payments.destroy');
+        Route::put('/payments/{id}/status', [PaymentController::class, 'updateStatus'])->name('payments.updateStatus');
 
-        Route::get('/reviews', [ReviewController::class, 'index']);
-        Route::get('/reviews/{shopId}', [ReviewController::class, 'showReviews']);
+        // Review management
+        Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews.index');
+        Route::get('/reviews/{shopId}', [ReviewController::class, 'showReviews'])->name('reviews.showReviews');
 
-        Route::get('/reports', [ReportController::class, 'index']);
+        // Report management
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
 
-        Route::apiResource('/banners', BannerController::class);
+        // Banner management
+        Route::apiResource('/banners', BannerController::class)->names([
+            'index' => 'banners.index',
+            'store' => 'banners.store',
+            'show' => 'banners.show',
+            'update' => 'banners.update',
+            'destroy' => 'banners.destroy',
+        ]);
     });
 });
 

@@ -99,7 +99,7 @@
                 </div>
               </div>
             </th>
-            <th class="px-4 py-2 border">
+            <th v-if="hasPermission('delete')" class="px-4 py-2 border">
               <div class="eds-table__cell">
                 <span class="list-header-item-label">Hành động</span>
               </div>
@@ -165,13 +165,13 @@
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
                     <select
-                    :value="product.status"
-                    @change="confirmUpdateProductStatus(product.id, $event.target.value)"
-                    class="w-32 text-sm border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                      :value="product.status"
+                      @change="confirmUpdateProductStatus(product.id, $event.target.value)"
+                      class="w-32 text-sm border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
                     >
-                        <option value="pending">Chờ duyệt</option>
-                        <option value="approved">Đã duyệt</option>
-                        <option value="banned">Bị cấm</option>
+                      <option value="pending">Chờ duyệt</option>
+                      <option value="approved">Đã duyệt</option>
+                      <option value="banned">Bị cấm</option>
                     </select>
                   </td>
                 </tr>
@@ -207,13 +207,13 @@
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
                     <label class="relative inline-flex items-center cursor-pointer">
-                     <input
+                      <input
                         type="checkbox"
                         :checked="variant.status === 'active'"
                         @change="confirmUpdateVariantStatus(product.id, variant.id, $event.target.checked ? 'active' : 'inactive')"
                         class="sr-only"
                         :aria-label="`Toggle status for variant ${variant.color || 'N/A'} (${variant.size || 'N/A'})`"
-                        />
+                      />
                       <div class="w-10 h-5 rounded-full transition duration-200 ease-in-out" :class="{ 'bg-green-600': variant.status === 'active', 'bg-gray-300': variant.status !== 'active' }"></div>
                       <div class="absolute w-3 h-3 bg-white rounded-full transition duration-200 ease-in-out" :class="{ 'translate-x-5': variant.status === 'active', 'translate-x-1': variant.status !== 'active' }"></div>
                     </label>
@@ -246,38 +246,38 @@
                 <p class="text-sm text-gray-600">Có 2 yếu tố cần điều chỉnh</p>
               </div>
             </td>
-            <td class="px-4 py-2 border text-center align-middle">
+            <td v-if="hasPermission('delete')" class="px-4 py-2 border text-center align-middle">
               <button
                 @click="confirmDelete(product.id)"
                 class="text-red-600 hover:text-red-800"
                 :disabled="deletingProduct === product.id"
                 :aria-label="`Xóa sản phẩm ${product.name || 'N/A'}`"
-                >
+              >
                 <svg
-                    v-if="deletingProduct !== product.id"
-                    class="w-5 h-5 inline"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
+                  v-if="deletingProduct !== product.id"
+                  class="w-5 h-5 inline"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
-                    <path d="M3 6h18"></path>
-                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                    <line x1="10" y1="11" x2="10" y2="17"></line>
-                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
                 </svg>
                 <span v-else class="text-sm">Đang xóa...</span>
-                </button>
+              </button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-     <ConfirmModal
+    <ConfirmModal
       :show="showConfirmModal"
       :message="confirmMessage"
       @confirm="handleConfirm"
@@ -332,9 +332,22 @@ export default {
     },
   },
   async mounted() {
+    if (!this.hasPermission('view')) {
+      this.$router.push('/admin/reviews');
+      return;
+    }
     await this.fetchProducts();
   },
   methods: {
+    hasPermission(action) {
+      const role = localStorage.getItem('role');
+      const permissions = {
+        superadmin: ['view', 'updateStatus', 'delete'],
+        admin: ['view', 'updateStatus'],
+        moderator: ['view', 'updateStatus'],
+      };
+      return permissions[role]?.includes(action) || false;
+    },
     async fetchProducts() {
       const token = localStorage.getItem('token');
       try {
@@ -416,6 +429,10 @@ export default {
     },
     async deleteProduct(productId) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa sản phẩm.');
+        return;
+      }
       try {
         if (!token) throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         this.deletingProduct = productId;

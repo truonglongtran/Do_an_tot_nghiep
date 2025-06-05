@@ -44,14 +44,30 @@
           <td class="px-4 py-2 border text-center">
             <div class="flex items-center justify-center">
               <select
+                v-if="hasPermission('updateStatus')"
                 v-model="payment.tempStatus"
                 @change="confirmToggleStatus(payment)"
                 class="border border-gray-300 rounded-md p-1 focus:ring-blue-500 focus:border-blue-500 status-select"
+                :class="{
+                  'text-green-600': payment.tempStatus === 'success',
+                  'text-red-600': payment.tempStatus === 'failed',
+                  'text-yellow-600': payment.tempStatus === 'refund'
+                }"
               >
-                <option value="success" :class="{'text-green-600': payment.tempStatus === 'success'}">Thành công</option>
-                <option value="failed" :class="{'text-red-600': payment.tempStatus === 'failed'}">Thất bại</option>
-                <option value="refund" :class="{'text-yellow-600': payment.tempStatus === 'refund'}">Hoàn tiền</option>
+                <option value="success">Thành công</option>
+                <option value="failed">Thất bại</option>
+                <option value="refund">Hoàn tiền</option>
               </select>
+              <span
+                v-else
+                :class="{
+                  'text-green-600': payment.status === 'success',
+                  'text-red-600': payment.status === 'failed',
+                  'text-yellow-600': payment.status === 'refund'
+                }"
+              >
+                {{ statusText[payment.status] || 'N/A' }}
+              </span>
             </div>
           </td>
           <td class="px-4 py-2 border text-center space-x-2">
@@ -62,12 +78,14 @@
               Chi tiết
             </button>
             <button
+              v-if="hasPermission('update')"
               @click="openEditForm(payment)"
               class="text-green-600 hover:underline"
             >
               Sửa
             </button>
             <button
+              v-if="hasPermission('delete')"
               @click="openConfirmModal('delete', payment)"
               class="text-red-600 hover:underline"
             >
@@ -93,6 +111,7 @@
 
 <script>
 import axios from 'axios';
+import { useRouter } from 'vue-router';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
 import GenericDetailsModal from './component/GenericDetailsModal.vue';
@@ -100,6 +119,10 @@ import GenericDetailsModal from './component/GenericDetailsModal.vue';
 export default {
   name: 'AdminPayments',
   components: { FilterSearch, ConfirmModal, GenericDetailsModal },
+  setup() {
+    const router = useRouter();
+    return { router };
+  },
   data() {
     return {
       payments: [],
@@ -172,11 +195,25 @@ export default {
     },
   },
   async mounted() {
+    console.log('Mounted AdminPayments, Role:', localStorage.getItem('role'));
+    console.log('Has view permission:', this.hasPermission('view'));
     await this.fetchPayments();
   },
   methods: {
+    hasPermission(action) {
+      const role = localStorage.getItem('role');
+      const matchedRoute = this.router.getRoutes().find((r) => r.path === '/admin/payments');
+      if (!matchedRoute || !matchedRoute.meta || !matchedRoute.meta.permissions) {
+        console.warn('Không tìm thấy meta.permissions cho /admin/payments');
+        return false;
+      }
+      const hasPermission = matchedRoute.meta.permissions[role]?.includes(action) || false;
+      console.log(`Quyền ${action} cho role ${role}:`, hasPermission);
+      return hasPermission;
+    },
     async fetchPayments() {
       const token = localStorage.getItem('token');
+      console.log('Token:', token);
       try {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
@@ -184,6 +221,11 @@ export default {
         const response = await axios.get('http://localhost:8000/api/admin/payments', {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Phản hồi API:', response.data);
+        if (!Array.isArray(response.data)) {
+          console.error('Dữ liệu trả về không phải mảng:', response.data);
+          throw new Error('Dữ liệu thanh toán không đúng định dạng.');
+        }
         this.payments = response.data.map((payment) => ({
           ...payment,
           order_id: payment.order_id || '',
@@ -196,8 +238,9 @@ export default {
         this.paymentMethods = this.extractPaymentMethods(response.data);
       } catch (error) {
         console.error('Lỗi khi tải danh sách thanh toán:', error);
-        alert('Không thể tải danh sách thanh toán.');
-        if (error.response?.status === 401) {
+        alert('Không thể tải danh sách thanh toán: ' + (error.message || 'Lỗi không xác định.'));
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.warn('Lỗi xác thực hoặc quyền, chuyển hướng về login');
           this.$router.push('/admin/login');
         }
       }
@@ -208,6 +251,11 @@ export default {
     },
     async updateStatus(payment) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('updateStatus')) {
+        alert('Bạn không có quyền cập nhật trạng thái.');
+        payment.tempStatus = this.originalStatus;
+        return;
+      }
       try {
         await axios.put(
           `http://localhost:8000/api/admin/payments/${payment.id}/status`,
@@ -219,12 +267,16 @@ export default {
         alert('Cập nhật trạng thái thành công');
       } catch (error) {
         console.error('Lỗi cập nhật trạng thái:', error);
-        alert('Cập nhật trạng thái thất bại');
+        alert('Cập nhật trạng thái thất bại: ' + (error.response?.data?.message || error.message));
         payment.tempStatus = this.originalStatus;
       }
     },
     async deletePayment(paymentId) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa thanh toán.');
+        return;
+      }
       try {
         await axios.delete(`http://localhost:8000/api/admin/payments/${paymentId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -234,7 +286,10 @@ export default {
         alert('Đã xóa thanh toán thành công');
       } catch (error) {
         console.error('Lỗi khi xóa thanh toán:', error);
-        alert('Xóa thanh toán thất bại');
+        alert('Xóa thanh toán thất bại: ' + (error.response?.data?.message || error.message));
+        if (error.response?.status === 403) {
+          alert('Bạn không có quyền xóa thanh toán.');
+        }
       }
     },
     confirmToggleStatus(payment) {
@@ -243,6 +298,14 @@ export default {
       this.openConfirmModal('status', payment, newStatus);
     },
     openConfirmModal(action, payment, newStatus = null) {
+      if (action === 'delete' && !this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa thanh toán.');
+        return;
+      }
+      if (action === 'status' && !this.hasPermission('updateStatus')) {
+        alert('Bạn không có quyền cập nhật trạng thái.');
+        return;
+      }
       this.confirmAction = action;
       this.confirmPayment = payment;
       if (action === 'delete') {
@@ -290,6 +353,10 @@ export default {
       this.selectedPayment = null;
     },
     openEditForm(payment) {
+      if (!this.hasPermission('update')) {
+        alert('Bạn không có quyền sửa thanh toán.');
+        return;
+      }
       this.editingPayment = {
         id: payment.id,
         order_id: payment.order_id || '',

@@ -13,6 +13,7 @@
           @search="applySearch"
         />
         <button
+          v-if="hasPermission('create')"
           @click="openAddModal"
           class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
         >
@@ -63,12 +64,14 @@
                 Xem chi tiết
               </button>
               <button
+                v-if="hasPermission('update')"
                 @click="openEditModal(banner)"
                 class="text-green-600 hover:underline"
               >
                 Sửa
               </button>
               <button
+                v-if="hasPermission('delete')"
                 @click="openDeleteModal(banner)"
                 class="text-red-600 hover:underline"
               >
@@ -106,6 +109,7 @@
 
 <script>
 import axios from 'axios';
+import { useRouter } from 'vue-router';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import GenericDetailsModal from './component/GenericDetailsModal.vue';
 import FormModal from './component/FormModal.vue';
@@ -113,6 +117,10 @@ import FormModal from './component/FormModal.vue';
 export default {
   name: 'AdminBanners',
   components: { FilterSearch, GenericDetailsModal, FormModal },
+  setup() {
+    const router = useRouter();
+    return { router };
+  },
   data() {
     return {
       banners: [],
@@ -255,9 +263,22 @@ export default {
     },
   },
   async mounted() {
+    console.log('Mounted AdminBanners, Role:', localStorage.getItem('role'));
+    console.log('Has view permission:', this.hasPermission('view'));
     await this.fetchBanners();
   },
   methods: {
+    hasPermission(action) {
+      const role = localStorage.getItem('role');
+      const matchedRoute = this.router.getRoutes().find((r) => r.path === '/admin/banners');
+      if (!matchedRoute || !matchedRoute.meta || !matchedRoute.meta.permissions) {
+        console.warn('Không tìm thấy meta.permissions cho /admin/banners');
+        return false;
+      }
+      const hasPermission = matchedRoute.meta.permissions[role]?.includes(action) || false;
+      console.log(`Quyền ${action} cho role ${role}:`, hasPermission);
+      return hasPermission;
+    },
     async fetchBanners() {
       const token = localStorage.getItem('token');
       try {
@@ -273,21 +294,28 @@ export default {
           params,
         });
         console.log('Response:', response.data);
+        if (!Array.isArray(response.data.banners)) {
+          throw new Error('Dữ liệu banners không đúng định dạng.');
+        }
         this.banners = response.data.banners;
-        this.positions = response.data.positions;
+        this.positions = response.data.positions || ['homepage', 'sidebar', 'footer'];
         this.errorMessage = '';
       } catch (error) {
-        console.error('Error fetching banners:', error.response || error);
+        console.error('Lỗi khi tải banners:', error.response || error);
         this.errorMessage = error.response?.status === 401
           ? 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.'
-          : 'Không thể tải danh sách banner. Vui lòng thử lại sau.';
-        if (error.response?.status === 401) {
+          : 'Không thể tải danh sách banner: ' + (error.message || 'Lỗi không xác định.');
+        if (error.response?.status === 401 || error.response?.status === 403) {
           this.$router.push('/admin/login');
         }
       }
     },
     async handleBannerFormSubmit(form) {
       console.log('Form data:', form, 'Mode:', this.modalMode);
+      if (!this.hasPermission(this.modalMode === 'add' ? 'create' : this.modalMode === 'edit' ? 'update' : 'delete')) {
+        alert(`Bạn không có quyền ${this.modalMode === 'add' ? 'tạo' : this.modalMode === 'edit' ? 'cập nhật' : 'xóa'} banner.`);
+        return;
+      }
       const token = localStorage.getItem('token');
       if (!token) {
         alert('Vui lòng đăng nhập lại.');
@@ -324,7 +352,7 @@ export default {
         this.closeBannerModal();
         this.errorMessage = '';
       } catch (error) {
-        console.error('Error handling banner form:', error.response || error);
+        console.error('Lỗi xử lý form banner:', error.response || error);
         if (error.response?.status === 422) {
           const errors = error.response.data.details || error.response.data.errors;
           let errorMessage = 'Lỗi xác thực:\n';
@@ -333,7 +361,7 @@ export default {
           }
           alert(errorMessage);
         } else {
-          alert('Lỗi: ' + (error.response?.data?.error || error.message));
+          alert('Lỗi: ' + (error.response?.data?.message || error.message));
         }
       }
     },
@@ -347,17 +375,17 @@ export default {
     },
     formatDate(date) {
       if (!date) return 'N/A';
-      return new Date(date).toLocaleString('vi-VN', {
+      return new Intl.DateTimeFormat('vi-VN', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-      });
+      }).format(new Date(date));
     },
     truncateUrl(url) {
       if (!url) return 'N/A';
-      return url.length > 30 ? url.substring(0, 27) + '...' : url;
+      return url.length > 30 ? url.slice(0, 27) + '...' : url;
     },
     handleImageError(event, banner) {
       event.target.src = 'https://via.placeholder.com/150?text=Image+Not+Found';
@@ -375,6 +403,10 @@ export default {
       this.selectedBanner = null;
     },
     openAddModal() {
+      if (!this.hasPermission('create')) {
+        alert('Bạn không có quyền tạo banner.');
+        return;
+      }
       this.modalMode = 'add';
       this.modalTitle = 'Thêm banner';
       this.modalFields = this.bannerFormFields;
@@ -387,6 +419,10 @@ export default {
       }
     },
     openEditModal(banner) {
+      if (!this.hasPermission('update')) {
+        alert('Bạn không có quyền sửa banner.');
+        return;
+      }
       this.modalMode = 'edit';
       this.modalTitle = 'Sửa banner';
       this.modalFields = this.bannerFormFields;
@@ -406,6 +442,10 @@ export default {
       }
     },
     openDeleteModal(banner) {
+      if (!this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa banner.');
+        return;
+      }
       this.modalMode = 'delete';
       this.modalTitle = 'Xác nhận xóa';
       this.modalFields = this.deleteFormFields;
