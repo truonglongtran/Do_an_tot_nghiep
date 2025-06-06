@@ -39,12 +39,12 @@ class AuthController extends Controller
                 if ($admin->status !== 'active') {
                     return response()->json(['message' => 'Tài khoản bị khóa admin'], 403);
                 }
-                RateLimiter::clear('login:' . $email); // Xóa giới hạn khi đăng nhập thành công
-                $token = $admin->createToken('admin-token', ['role:admin'])->plainTextToken;
+                RateLimiter::clear('login:' . $email);
+                $token = $admin->createToken('admin-token', ['role:' . $admin->role])->plainTextToken;
                 return response()->json([
                     'token' => $token,
                     'user' => $admin,
-                    'role' => 'admin',
+                    'role' => $admin->role,
                 ], 200);
             }
         } else {
@@ -63,7 +63,6 @@ class AuthController extends Controller
             }
         }
 
-        // Nếu không thành công, tăng số lần thử
         RateLimiter::hit('login:' . $email);
 
         return response()->json(['message' => 'Thông tin đăng nhập không hợp lệ'], 401);

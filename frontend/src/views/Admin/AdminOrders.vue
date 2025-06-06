@@ -38,6 +38,7 @@
           <td class="px-4 py-2 border text-center">{{ formatCurrency(order.total_amount) }}</td>
           <td class="px-4 py-2 border text-center">
             <select
+              v-if="hasPermission('updateStatus')"
               v-model="tempStatuses[order.id].settled_status"
               @change="confirmUpdateStatus(order, 'settled_status', $event.target.value)"
               class="border rounded px-2 py-1"
@@ -47,9 +48,11 @@
               <option value="unsettled">Chưa thanh toán</option>
               <option value="settled">Đã thanh toán</option>
             </select>
+            <span v-else>{{ statusText.settled[order.settled_status] || 'N/A' }}</span>
           </td>
           <td class="px-4 py-2 border text-center">
             <select
+              v-if="hasPermission('updateStatus')"
               v-model="tempStatuses[order.id].shipping_status"
               @change="confirmUpdateStatus(order, 'shipping_status', $event.target.value)"
               class="border rounded px-2 py-1"
@@ -63,9 +66,11 @@
               <option value="failed">Thất bại</option>
               <option value="return">Trả hàng</option>
             </select>
+            <span v-else>{{ statusText.shipping[order.shipping_status] || 'N/A' }}</span>
           </td>
           <td class="px-4 py-2 border text-center">
             <select
+              v-if="hasPermission('updateStatus')"
               v-model="tempStatuses[order.id].order_status"
               @change="confirmUpdateStatus(order, 'order_status', $event.target.value)"
               class="border rounded px-2 py-1"
@@ -76,6 +81,7 @@
               <option value="paid">Đã thanh toán</option>
               <option value="canceled">Đã hủy</option>
             </select>
+            <span v-else>{{ statusText.order[order.order_status] || 'N/A' }}</span>
           </td>
           <td class="px-4 py-2 border text-center">
             <button
@@ -86,6 +92,7 @@
               Chi tiết
             </button>
             <button
+              v-if="hasPermission('delete')"
               @click="openConfirmModal('delete', order)"
               class="text-red-600 hover:underline"
               :disabled="isUpdating"
@@ -121,6 +128,7 @@
 
 <script>
 import axios from 'axios';
+import { useRouter } from 'vue-router';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
 import GenericDetailsModal from './component/GenericDetailsModal.vue';
@@ -128,6 +136,10 @@ import GenericDetailsModal from './component/GenericDetailsModal.vue';
 export default {
   name: 'AdminOrders',
   components: { FilterSearch, ConfirmModal, GenericDetailsModal },
+  setup() {
+    const router = useRouter();
+    return { router };
+  },
   data() {
     return {
       orders: [],
@@ -205,14 +217,13 @@ export default {
             if (!items || !Array.isArray(items) || items.length === 0) {
               return 'Không có sản phẩm';
             }
-            // Trả về HTML table như một chuỗi
             return `
               <table class="min-w-full border">
                 <thead>
                   <tr>
                     <th class="px-4 py-2 border-b bg-gray-50 text-left">Sản phẩm</th>
                     <th class="px-4 py-2 border-b bg-gray-50 text-left">Màu</th>
-                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Kích cỡ</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left relative">Kích cỡ</th>
                     <th class="px-4 py-2 border-b bg-gray-50 text-center">Số lượng</th>
                     <th class="px-4 py-2 border-b bg-gray-50 text-right">Giá</th>
                   </tr>
@@ -273,11 +284,25 @@ export default {
     },
   },
   async mounted() {
+    console.log('Mounted AdminOrders, Role:', localStorage.getItem('role'));
+    console.log('Has view permission:', this.hasPermission('view'));
     await this.fetchOrders();
   },
   methods: {
+    hasPermission(action) {
+      const role = localStorage.getItem('role');
+      const matchedRoute = this.router.getRoutes().find((r) => r.path === '/admin/orders');
+      if (!matchedRoute || !matchedRoute.meta || !matchedRoute.meta.permissions) {
+        console.warn('Không tìm thấy meta.permissions cho /admin/orders');
+        return false;
+      }
+      const hasPermission = matchedRoute.meta.permissions[role]?.includes(action) || false;
+      console.log(`Quyền ${action} cho role ${role}:`, hasPermission);
+      return hasPermission;
+    },
     async fetchOrders() {
       const token = localStorage.getItem('token');
+      console.log('Token:', token);
       try {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
@@ -285,6 +310,11 @@ export default {
         const response = await axios.get('http://localhost:8000/api/admin/orders', {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Phản hồi API:', response.data);
+        if (!Array.isArray(response.data)) {
+          console.error('Dữ liệu trả về không phải mảng:', response.data);
+          throw new Error('Dữ liệu đơn hàng không đúng định dạng.');
+        }
         this.orders = response.data.map((order) => {
           const settledStatus = order.settled_status && ['unsettled', 'settled'].includes(order.settled_status) ? order.settled_status : 'unsettled';
           const shippingStatus = order.shipping_status && ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'].includes(order.shipping_status) ? order.shipping_status : 'pending';
@@ -305,8 +335,9 @@ export default {
         this.allOrders = [...this.orders];
       } catch (error) {
         console.error('Lỗi khi tải danh sách đơn hàng:', error.response?.data || error.message);
-        alert('Không thể tải danh sách đơn hàng.');
-        if (error.response?.status === 401) {
+        alert('Không thể tải danh sách đơn hàng: ' + (error.message || 'Lỗi không xác định.'));
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.warn('Lỗi xác thực hoặc quyền, chuyển hướng về login');
           this.$router.push('/admin/login');
         }
       }
@@ -314,6 +345,12 @@ export default {
     async updateStatus(order) {
       this.isUpdating = true;
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('updateStatus')) {
+        alert('Bạn không có quyền cập nhật trạng thái.');
+        this.tempStatuses[order.id][this.statusField] = this.originalStatus;
+        this.isUpdating = false;
+        return;
+      }
       try {
         if (!this.newStatus) {
           throw new Error('Trạng thái mới không hợp lệ');
@@ -338,6 +375,11 @@ export default {
     async deleteOrder(orderId) {
       this.isUpdating = true;
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa đơn hàng.');
+        this.isUpdating = false;
+        return;
+      }
       try {
         await axios.delete(`http://localhost:8000/api/admin/orders/${orderId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -349,6 +391,9 @@ export default {
       } catch (error) {
         console.error('Lỗi khi xóa đơn hàng:', error.response?.data || error.message);
         alert('Xóa đơn hàng thất bại');
+        if (error.response?.status === 403) {
+          alert('Bạn không có quyền xóa đơn hàng.');
+        }
       } finally {
         this.isUpdating = false;
       }
@@ -435,6 +480,9 @@ export default {
     formatDate(date) {
       if (!date) return 'N/A';
       return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date));
+    },
+    applySearch() {
+      console.log('Apply Order Search:', this.searchQuery);
     },
   },
 };

@@ -10,6 +10,7 @@
         @search="applySearch"
       />
       <button
+        v-if="hasPermission('create')"
         @click="openAddForm"
         class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
       >
@@ -73,6 +74,7 @@
           </td>
           <td class="px-4 py-2 border text-center space-x-2">
             <button
+              v-if="hasPermission('update')"
               @click="openEditForm(voucher)"
               class="text-yellow-600 hover:underline"
             >
@@ -85,6 +87,7 @@
               Chi tiết
             </button>
             <button
+              v-if="hasPermission('delete')"
               @click="openConfirmModal('delete', voucher)"
               class="text-red-600 hover:underline"
             >
@@ -117,6 +120,7 @@
 
 <script>
 import axios from 'axios';
+import { useRouter } from 'vue-router';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
 import FormModal from './component/FormModal.vue';
@@ -125,6 +129,10 @@ import GenericDetailsModal from './component/GenericDetailsModal.vue';
 export default {
   name: 'AdminVouchers',
   components: { FilterSearch, ConfirmModal, FormModal, GenericDetailsModal },
+  setup() {
+    const router = useRouter();
+    return { router };
+  },
   data() {
     return {
       vouchers: [],
@@ -405,6 +413,13 @@ export default {
     },
   },
   async mounted() {
+    console.log('Mounted AdminVouchers, Role:', localStorage.getItem('role'));
+    console.log('Has view permission:', this.hasPermission('view'));
+    if (!this.hasPermission('view')) {
+      console.warn('Không có quyền view, chuyển hướng về dashboard');
+      this.$router.push('/admin/dashboard');
+      return;
+    }
     await Promise.all([
       this.fetchVouchers(),
       this.fetchShops(),
@@ -413,6 +428,17 @@ export default {
     ]);
   },
   methods: {
+    hasPermission(action) {
+      const role = localStorage.getItem('role');
+      const matchedRoute = this.router.getRoutes().find((r) => r.path === '/admin/vouchers');
+      if (!matchedRoute || !matchedRoute.meta || !matchedRoute.meta.permissions) {
+        console.warn('Không tìm thấy meta.permissions cho /admin/vouchers');
+        return false;
+      }
+      const hasPermission = matchedRoute.meta.permissions[role]?.includes(action) || false;
+      console.log(`Quyền ${action} cho role ${role}:`, hasPermission);
+      return hasPermission;
+    },
     formatDateForInput(dateStr) {
       if (!dateStr) return '';
       try {
@@ -522,6 +548,10 @@ export default {
     },
     async handleVoucherFormSubmit(form) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission(this.editingVoucher ? 'update' : 'create')) {
+        alert(`Bạn không có quyền ${this.editingVoucher ? 'sửa' : 'tạo'} voucher.`);
+        return;
+      }
       console.log('Submitting form:', form, 'Editing:', !!this.editingVoucher);
       try {
         const response = this.editingVoucher
@@ -563,6 +593,10 @@ export default {
     },
     async deleteVoucher(voucherId) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa voucher.');
+        return;
+      }
       try {
         await axios.delete(`http://localhost:8000/api/admin/vouchers/${voucherId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -576,6 +610,10 @@ export default {
       }
     },
     openConfirmModal(action, voucher) {
+      if (action === 'delete' && !this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa voucher.');
+        return;
+      }
       this.confirmAction = action;
       this.confirmVoucher = voucher;
       if (action === 'delete') {
@@ -595,6 +633,10 @@ export default {
       this.confirmMessage = '';
     },
     openAddForm() {
+      if (!this.hasPermission('create')) {
+        alert('Bạn không có quyền tạo voucher.');
+        return;
+      }
       if (!this.shops.length || !this.products.length || !this.shippingPartners.length) {
         alert('Vui lòng đợi dữ liệu cửa hàng, sản phẩm và đối tác vận chuyển được tải.');
         return;
@@ -606,6 +648,10 @@ export default {
       this.$refs.formModal.initializeForm(this.formData);
     },
     openEditForm(voucher) {
+      if (!this.hasPermission('update')) {
+        alert('Bạn không có quyền sửa voucher.');
+        return;
+      }
       if (!this.shops.length || !this.products.length || !this.shippingPartners.length) {
         alert('Vui lòng đợi dữ liệu cửa hàng, sản phẩm và đối tác vận chuyển được tải.');
         return;

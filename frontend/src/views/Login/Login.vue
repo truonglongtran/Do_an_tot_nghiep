@@ -73,46 +73,46 @@ export default {
   },
   methods: {
     async login() {
-  this.isLoading = true;
-  this.errors = { email: '', password: '' };
+      this.isLoading = true;
+      this.errors = { email: '', password: '' };
 
-  try {
-    console.log('Gửi yêu cầu tới:', this.loginEndpoint);
-    console.log('Dữ liệu gửi:', JSON.stringify(this.form));
-    const response = await axios.post(this.loginEndpoint, this.form, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    console.log('Phản hồi đầy đủ:', response);
-    console.log('Dữ liệu phản hồi:', response.data);
-    if (response.status === 200 && response.data.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('role', response.data.role);
-      localStorage.setItem('loginType', this.route.path.split('/')[1]);
-      const loginType = this.route.path.split('/')[1];
-      if (loginType === 'admin') {
-        this.router.push('/admin/dashboard');
-      } else if (loginType === 'seller') {
-        this.router.push('/seller/dashboard');
-      } else if (loginType === 'buyer') {
-        this.router.push('/buyer/dashboard');
+      try {
+        console.log('Gửi yêu cầu tới:', this.loginEndpoint);
+        console.log('Dữ liệu gửi:', JSON.stringify(this.form));
+        const response = await axios.post(this.loginEndpoint, this.form, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        console.log('Phản hồi đầy đủ:', response);
+        console.log('Dữ liệu phản hồi:', response.data);
+        if (response.status === 200 && response.data.token) {
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem('role', response.data.role);
+          localStorage.setItem('loginType', this.route.path.split('/')[1]);
+          const loginType = this.route.path.split('/')[1];
+          if (loginType === 'admin') {
+            this.router.push('/admin/dashboard');
+          } else if (loginType === 'seller') {
+            this.router.push('/seller/dashboard');
+          } else if (loginType === 'buyer') {
+            this.router.push('/buyer/dashboard');
+          }
+        } else {
+          console.log('Lỗi: Phản hồi không hợp lệ, status:', response.status, 'data:', response.data);
+          this.errors.email = response.data.message || 'Đã có lỗi xảy ra khi đăng nhập';
+        }
+      } catch (error) {
+        console.error('Lỗi đăng nhập:', error.response?.data || error.message);
+        const message = error.response?.data?.message || 'Đã có lỗi xảy ra';
+        this.errors.email = message;
+        if (message.includes('Thông tin đăng nhập')) {
+          this.errors.password = 'Email hoặc mật khẩu không đúng';
+        }
+      } finally {
+        this.isLoading = false;
       }
-    } else {
-      console.log('Lỗi: Phản hồi không hợp lệ, status:', response.status, 'data:', response.data);
-      this.errors.email = response.data.message || 'Đã có lỗi xảy ra khi đăng nhập';
-    }
-  } catch (error) {
-    console.error('Lỗi đăng nhập:', error.response?.data || error.message);
-    const message = error.response?.data?.message || 'Đã có lỗi xảy ra';
-    this.errors.email = message;
-    if (message.includes('Thông tin đăng nhập')) {
-      this.errors.password = 'Email hoặc mật khẩu không đúng';
-    }
-  } finally {
-    this.isLoading = false;
-  }
-},
+    },
   },
 };
 </script>

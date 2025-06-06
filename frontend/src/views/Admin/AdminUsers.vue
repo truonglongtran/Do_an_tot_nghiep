@@ -10,6 +10,7 @@
         @search="applySearch"
       />
       <button
+        v-if="hasPermission('create')"
         @click="openAddForm"
         class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
       >
@@ -36,21 +37,19 @@
           <th class="px-4 py-2 border">Email</th>
           <th class="px-4 py-2 border">Vai trò</th>
           <th class="px-4 py-2 border">Trạng thái</th>
-          <th class="px-4 py-2 border">Hành động</th>
+          <th v-if="hasPermission('delete')" class="px-4 py-2 border">Hành động</th>
         </tr>
       </thead>
       <tbody>
         <tr
           v-for="(user, index) in filteredUsers"
-          :key="user.id"
-          class="hover:bg-gray-50 transition"
-        >
+          :key="user.id">
           <td class="px-4 py-2 border text-center">{{ index + 1 }}</td>
           <td class="px-4 py-2 border text-center">{{ user.email || 'N/A' }}</td>
           <td class="px-4 py-2 border capitalize text-center">{{ user.role || 'N/A' }}</td>
           <td class="px-4 py-2 border">
             <div class="flex items-center gap-3 justify-center">
-              <label class="relative inline-flex items-center cursor-pointer">
+              <label v-if="hasPermission('updateStatus')" class="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
                   class="sr-only peer"
@@ -74,7 +73,7 @@
               </span>
             </div>
           </td>
-          <td class="px-4 py-2 border text-center">
+          <td v-if="hasPermission('delete')" class="px-4 py-2 border text-center">
             <button
               @click="openConfirmModal('delete', user)"
               class="text-red-600 hover:underline"
@@ -174,14 +173,11 @@ export default {
         label: r.charAt(0).toUpperCase() + r.slice(1),
         count: this.filterCountByRole(r),
       }));
-      const filters = [...statusFilters, ...roleFilters];
-      console.log('User Filters:', filters);
-      return filters;
+      return [...statusFilters, ...roleFilters];
     },
     filteredUsers() {
       const q = this.searchQuery.toLowerCase();
-      console.log('Filtering Users:', q, 'Filter:', this.currentFilter);
-      const result = this.allUsers.filter((user) => {
+      return this.allUsers.filter((user) => {
         const matchQuery =
           (user.email || '').toLowerCase().includes(q) ||
           (user.role || '').toLowerCase().includes(q);
@@ -191,14 +187,26 @@ export default {
           user.role === this.currentFilter;
         return matchQuery && matchFilter;
       });
-      console.log('Filtered Users:', result);
-      return result;
     },
   },
   async mounted() {
+    // Kiểm tra quyền truy cập
+    if (!this.hasPermission('view')) {
+      this.$router.push('/admin/reviews');
+      return;
+    }
     await this.fetchUsers();
   },
   methods: {
+    hasPermission(action) {
+      const role = localStorage.getItem('role');
+      const permissions = {
+        superadmin: ['view', 'create', 'update', 'delete', 'updateStatus'],
+        admin: ['view', 'update', 'updateStatus'],
+        moderator: [],
+      };
+      return permissions[role]?.includes(action) || false;
+    },
     async fetchUsers() {
       const token = localStorage.getItem('token');
       console.log('Token:', token);
@@ -209,34 +217,41 @@ export default {
         const response = await axios.get('http://localhost:8000/api/admin/users', {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Phản hồi API:', response.data); // Debug dữ liệu trả về
+
+        // Kiểm tra response.data có phải mảng không
+        if (!Array.isArray(response.data)) {
+          console.error('Dữ liệu trả về không phải mảng:', response.data);
+          throw new Error('Dữ liệu người dùng không đúng định dạng.');
+        }
+
         this.users = response.data.map((user) => ({
           ...user,
           tempStatus: user.status === 'active',
         }));
         this.allUsers = this.users;
         this.roles = this.extractRoles(response.data);
-        console.log('Users:', this.users);
-        console.log('All Users:', this.allUsers);
-        console.log('Roles:', this.roles);
       } catch (error) {
         console.error('Lỗi khi tải danh sách người dùng:', error);
-        alert('Không thể tải danh sách người dùng.');
-        if (error.response?.status === 401) {
+        alert('Không thể tải danh sách người dùng: ' + (error.message || 'Lỗi không xác định.'));
+        if (error.response?.status === 401 || error.response?.status === 403) {
           this.$router.push('/admin/login');
         }
       }
     },
     extractRoles(users) {
-      const set = new Set(users.map((user) => user.role).filter(Boolean));
-      const roles = Array.from(set);
-      console.log('Roles:', roles);
-      return roles;
+      return Array.from(new Set(users.map((user) => user.role).filter(Boolean)));
     },
     async handleUserFormSubmit(form) {
       const token = localStorage.getItem('token');
       if (!token) {
         alert('Vui lòng đăng nhập lại.');
         this.$router.push('/admin/login');
+        return;
+      }
+      if (!this.hasPermission(this.editingUser ? 'update' : 'create')) {
+        alert('Bạn không có quyền thực hiện hành động này.');
+        this.showFormModal = false;
         return;
       }
       try {
@@ -275,6 +290,8 @@ export default {
             errorMessage += `- ${field}: ${errors[field].join(', ')}\n`;
           }
           alert(errorMessage);
+        } else if (error.response?.status === 403) {
+          alert('Bạn không có quyền thực hiện hành động này.');
         } else {
           alert('Lỗi: ' + (error.response?.data?.message || error.message));
         }
@@ -282,6 +299,12 @@ export default {
     },
     async updateStatus(user) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('updateStatus')) {
+        alert('Bạn không có quyền cập nhật trạng thái.');
+        user.status = this.originalStatus;
+        user.tempStatus = this.originalStatus === 'active';
+        return;
+      }
       try {
         await axios.put(
           `http://localhost:8000/api/admin/users/${user.id}/status`,
@@ -300,6 +323,10 @@ export default {
     },
     async deleteUser(userId) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa người dùng.');
+        return;
+      }
       try {
         await axios.delete(`http://localhost:8000/api/admin/users/${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -310,6 +337,9 @@ export default {
       } catch (error) {
         console.error('Lỗi khi xóa người dùng:', error);
         alert('Xóa người dùng thất bại');
+        if (error.response?.status === 403) {
+          alert('Bạn không có quyền xóa người dùng.');
+        }
       }
     },
     confirmToggleStatus(user) {
@@ -361,18 +391,18 @@ export default {
       this.editingUser = null;
       this.showFormModal = true;
     },
+    openEditForm(user) {
+      this.editingUser = { ...user };
+      this.showFormModal = true;
+    },
     applySearch() {
       console.log('Apply User Search:', this.searchQuery);
     },
     filterCountByStatus(status) {
-      const count = this.allUsers.filter((user) => user.status === status).length;
-      console.log(`Count Status (${status}):`, count);
-      return count;
+      return this.allUsers.filter((user) => user.status === status).length;
     },
     filterCountByRole(role) {
-      const count = this.allUsers.filter((user) => user.role === role).length;
-      console.log(`Count Role (${role}):`, count);
-      return count;
+      return this.allUsers.filter((user) => user.role === role).length;
     },
   },
 };

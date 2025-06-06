@@ -39,7 +39,8 @@
           <td class="px-4 py-2 border text-center">
             <select
               v-model="dispute.tempStatus"
-              @change="confirmToggleStatus(dispute)"
+              :disabled="!hasPermission('updateStatus')"
+              @change="hasPermission('updateStatus') && confirmToggleStatus(dispute)"
               class="border rounded px-2 py-1"
               :class="{
                 'text-yellow-600': dispute.tempStatus === 'open',
@@ -60,6 +61,7 @@
               Chi tiết
             </button>
             <button
+              v-if="hasPermission('delete')"
               @click="openConfirmModal('delete', dispute)"
               class="text-red-600 hover:underline"
             >
@@ -94,6 +96,7 @@
 
 <script>
 import axios from 'axios';
+import { useRouter } from 'vue-router';
 import FilterSearch from './component/AdminFilterSearch.vue';
 import ConfirmModal from './component/AdminConfirmModal.vue';
 import GenericDetailsModal from './component/GenericDetailsModal.vue';
@@ -101,6 +104,10 @@ import GenericDetailsModal from './component/GenericDetailsModal.vue';
 export default {
   name: 'AdminDisputes',
   components: { FilterSearch, ConfirmModal, GenericDetailsModal },
+  setup() {
+    const router = useRouter();
+    return { router };
+  },
   data() {
     return {
       disputes: [],
@@ -153,7 +160,6 @@ export default {
     },
     filteredDisputes() {
       const q = this.searchQuery.toLowerCase();
-      console.log('Filtering Disputes:', q, 'Filter:', this.currentFilter);
       return this.allDisputes.filter((dispute) => {
         const matchQuery =
           (dispute.reason || '').toLowerCase().includes(q) ||
@@ -166,11 +172,25 @@ export default {
     },
   },
   async mounted() {
+    console.log('Mounted AdminDisputes, Role:', localStorage.getItem('role'));
+    console.log('Has view permission:', this.hasPermission('view'));
     await this.fetchDisputes();
   },
   methods: {
+    hasPermission(action) {
+      const role = localStorage.getItem('role');
+      const matchedRoute = this.router.getRoutes().find((r) => r.path === '/admin/disputes');
+      if (!matchedRoute || !matchedRoute.meta || !matchedRoute.meta.permissions) {
+        console.warn('Không tìm thấy meta.permissions cho /admin/disputes');
+        return false;
+      }
+      const hasPermission = matchedRoute.meta.permissions[role]?.includes(action) || false;
+      console.log(`Quyền ${action} cho role ${role}:`, hasPermission);
+      return hasPermission;
+    },
     async fetchDisputes() {
       const token = localStorage.getItem('token');
+      console.log('Token:', token);
       try {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
@@ -178,22 +198,32 @@ export default {
         const response = await axios.get('http://localhost:8000/api/admin/disputes', {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Phản hồi API:', response.data);
+        if (!Array.isArray(response.data)) {
+          console.error('Dữ liệu trả về không phải mảng:', response.data);
+          throw new Error('Dữ liệu khiếu nại không đúng định dạng.');
+        }
         this.disputes = response.data.map((dispute) => ({
           ...dispute,
           tempStatus: dispute.status,
         }));
         this.allDisputes = this.disputes;
-        console.log('Disputes:', this.disputes);
       } catch (error) {
         console.error('Lỗi khi tải danh sách khiếu nại:', error);
-        alert('Không thể tải danh sách khiếu nại.');
-        if (error.response?.status === 401) {
+        alert('Không thể tải danh sách khiếu nại: ' + (error.message || 'Lỗi không xác định.'));
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.warn('Lỗi xác thực hoặc quyền, chuyển hướng về login');
           this.$router.push('/admin/login');
         }
       }
     },
     async updateStatus(dispute) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('updateStatus')) {
+        alert('Bạn không có quyền cập nhật trạng thái.');
+        dispute.tempStatus = this.originalStatus;
+        return;
+      }
       try {
         await axios.put(
           `http://localhost:8000/api/admin/disputes/${dispute.id}/status`,
@@ -205,13 +235,16 @@ export default {
         alert('Cập nhật trạng thái khiếu nại thành công');
       } catch (error) {
         console.error('Lỗi cập nhật trạng thái:', error);
-        alert('Cập nhật trạng thái thất bại');
-        dispute.status = this.originalStatus;
+        alert('Cập nhật trạng thái thất bại: ' + (error.response?.data?.message || error.message));
         dispute.tempStatus = this.originalStatus;
       }
     },
     async updateAdminNote(dispute, note) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('updateStatus')) {
+        alert('Bạn không có quyền cập nhật ghi chú.');
+        return;
+      }
       try {
         await axios.put(
           `http://localhost:8000/api/admin/disputes/${dispute.id}/status`,
@@ -222,11 +255,15 @@ export default {
         alert('Cập nhật ghi chú thành công');
       } catch (error) {
         console.error('Lỗi cập nhật ghi chú:', error);
-        alert('Cập nhật ghi chú thất bại');
+        alert('Cập nhật ghi chú thất bại: ' + (error.response?.data?.message || error.message));
       }
     },
     async deleteDispute(disputeId) {
       const token = localStorage.getItem('token');
+      if (!this.hasPermission('delete')) {
+        alert('Bạn không có quyền xóa khiếu nại.');
+        return;
+      }
       try {
         await axios.delete(`http://localhost:8000/api/admin/disputes/${disputeId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -236,7 +273,10 @@ export default {
         alert('Đã xóa khiếu nại thành công');
       } catch (error) {
         console.error('Lỗi khi xóa khiếu nại:', error);
-        alert('Xóa khiếu nại thất bại');
+        alert('Xóa khiếu nại thất bại: ' + (error.response?.data?.message || error.message));
+        if (error.response?.status === 403) {
+          alert('Bạn không có quyền xóa khiếu nại.');
+        }
       }
     },
     confirmToggleStatus(dispute) {
@@ -268,7 +308,6 @@ export default {
     },
     handleCancel() {
       if (this.confirmAction === 'status' && this.confirmDispute) {
-        this.confirmDispute.status = this.originalStatus;
         this.confirmDispute.tempStatus = this.originalStatus;
       }
       this.resetModal();
@@ -294,9 +333,7 @@ export default {
       console.log('Apply Dispute Search:', this.searchQuery);
     },
     filterCountByStatus(status) {
-      const count = this.allDisputes.filter((dispute) => dispute.status === status).length;
-      console.log(`Count Status (${status}):`, count);
-      return count;
+      return this.allDisputes.filter((dispute) => dispute.status === status).length;
     },
   },
 };
