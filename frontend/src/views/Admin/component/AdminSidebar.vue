@@ -55,13 +55,11 @@ export default {
       const role = localStorage.getItem('role');
       console.log('Kiểm tra quyền cho path:', path, 'với role:', role);
 
-      // Đặc biệt: Tổng quan hiển thị cho tất cả role
       if (path === '/admin/dashboard' && ['superadmin', 'admin', 'moderator'].includes(role)) {
         console.log('Tổng quan được phép cho role:', role);
         return true;
       }
 
-      // Tìm route tương ứng
       const matchedRoute = router.getRoutes().find((r) => r.path === path);
       if (!matchedRoute) {
         console.warn('Không tìm thấy route:', path);
@@ -78,7 +76,6 @@ export default {
       return hasViewPermission;
     };
 
-    // Lọc menuItems dựa trên quyền
     const filteredMenuItems = menuItems.filter((item) => {
       const allowed = hasPermission(item.to);
       console.log('Menu item:', item.label, 'Allowed:', allowed);
@@ -89,17 +86,26 @@ export default {
       const loginType = localStorage.getItem('loginType') || 'admin';
       const token = localStorage.getItem('token');
       console.log('Token khi đăng xuất:', token);
+      console.log('Login type:', loginType);
+
       if (!token) {
-        alert('Không tìm thấy token. Vui lòng đăng nhập lại.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        localStorage.removeItem('loginType');
         router.push(`/${loginType}/login`);
+        alert('Không tìm thấy token. Đã chuyển hướng đến trang đăng nhập.');
         return;
       }
+
       try {
         const response = await axios.post(
           `http://localhost:8000/api/${loginType}/logout`,
           {},
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
           }
         );
         console.log('Phản hồi đăng xuất:', response.data);
@@ -110,11 +116,15 @@ export default {
         router.push(`/${loginType}/login`);
       } catch (error) {
         console.error('Lỗi đăng xuất:', error);
-        alert('Đăng xuất thất bại: ' + (error.response?.data?.message || error.message));
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        localStorage.removeItem('loginType');
+        alert('Đăng xuất thất bại: ' + (error.response?.data?.message || 'Lỗi không xác định'));
+        router.push(`/${loginType}/login`);
       }
     };
 
     return { logout, filteredMenuItems };
-  }
+  },
 };
 </script>

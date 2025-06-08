@@ -31,7 +31,7 @@ class DatabaseSeeder extends Seeder
             ShippingVoucherPartnerSeeder::class,
             ProductVoucherSeeder::class,
             BannerSeeder::class,
-            AdminLogSeeder::class,
+            // AdminLogSeeder::class,
             ReportSeeder::class,
             BuyerAddressSeeder::class,
             ShopShippingPartnerSeeder::class,
