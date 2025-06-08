@@ -17,7 +17,6 @@ class RoleMiddleware
         $route = $request->route()->getName();
         $method = $request->method();
 
-        // Quyền của admin
         if ($user->role === 'admin') {
             if (in_array($route, ['admins.index', 'admins.store', 'admins.show', 'admins.update', 'admins.destroy'])) {
                 return response()->json(['message' => 'Admin không thể quản lý admin khác'], 403);
@@ -27,7 +26,6 @@ class RoleMiddleware
             }
         }
 
-        // Quyền của moderator
         if ($user->role === 'moderator') {
             if (in_array($route, ['users.index', 'users.store', 'users.show', 'users.update', 'users.destroy', 'users.updateStatus', 'admins.index', 'admins.store', 'admins.show', 'admins.update', 'admins.destroy', 'reports.index'])) {
                 return response()->json(['message' => 'Moderator không thể truy cập tài nguyên này'], 403);
