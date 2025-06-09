@@ -274,7 +274,7 @@ export default {
         const params = {};
         if (this.statusFilter !== 'all') params.status = this.statusFilter;
         if (this.searchQuery) params.name = this.searchQuery;
-        const response = await axios.get('http://localhost:8000/api/admin/shipping-partners/all', {
+        const response = await axios.get('/admin/shipping-partners/all', {
           headers: { Authorization: `Bearer ${token}` },
           params,
         });
@@ -310,7 +310,7 @@ export default {
       try {
         const newStatusValue = partner.tempStatus ? 'active' : 'inactive';
         await axios.put(
-          `http://localhost:8000/api/admin/shipping-partners/${partner.id}`,
+          `/admin/shipping-partners/${partner.id}`,
           { status: newStatusValue },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -337,7 +337,7 @@ export default {
         let response;
         if (this.editingPartner) {
           response = await axios.put(
-            `http://localhost:8000/api/admin/shipping-partners/${this.editingPartner.id}`,
+            `/admin/shipping-partners/${this.editingPartner.id}`,
             form,
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -349,7 +349,7 @@ export default {
           alert('Cập nhật đối tác thành công');
         } else {
           response = await axios.post(
-            'http://localhost:8000/api/admin/shipping-partners',
+            '/admin/shipping-partners',
             form,
             { headers: { Authorization: `Bearer ${token}` }
           });
@@ -382,7 +382,7 @@ export default {
         return;
       }
       try {
-        await axios.delete(`http://localhost:8000/api/admin/shipping-partners/${this.selectedPartner.id}`, {
+        await axios.delete(`/admin/shipping-partners/${this.selectedPartner.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.partners = this.partners.filter(p => p.id !== this.selectedPartner.id);

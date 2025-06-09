@@ -226,7 +226,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/admins', {
+        const response = await axios.get('/admin/admins', {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.admins = response.data.map((admin) => ({
@@ -248,7 +248,7 @@ export default {
     },
     extractRoles(admins) {
       const set = new Set(admins.map((admin) => admin.role).filter(Boolean));
-      const roles = Array.from(set).filter(role => ['admin', 'moderator'].includes(role));
+      const roles = Array.from(set).filter((role) => ['admin', 'moderator'].includes(role));
       if (!roles.includes('admin')) {
         roles.push('admin');
       }
@@ -265,16 +265,16 @@ export default {
       }
       try {
         const response = this.editingAdmin
-          ? await axios.put(
-              `http://localhost:8000/api/admin/admins/${this.editingAdmin.id}`,
-              form,
-              { headers: { Authorization: `Bearer ${token}` } }
-            )
-          : await axios.post(
-              'http://localhost:8000/api/admin/admins',
-              { email: form.email, password: form.password, role: form.role },
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
+          ? await axios.put(`/admin/admins/${this.editingAdmin.id}`, form, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+          : await axios.post('/admin/admins', {
+              email: form.email,
+              password: form.password,
+              role: form.role,
+            }, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
         if (this.editingAdmin) {
           Object.assign(this.editingAdmin, response.data.admin || response.data);
         } else {
@@ -304,11 +304,9 @@ export default {
     async updateStatus(admin) {
       const token = localStorage.getItem('token');
       try {
-        await axios.put(
-          `http://localhost:8000/api/admin/admins/${admin.id}/status`,
-          { status: this.newStatus },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await axios.put(`/admin/admins/${admin.id}/status`, { status: this.newStatus }, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         admin.status = this.newStatus;
         admin.tempStatus = this.newStatus === 'active';
         alert('Cập nhật trạng thái thành công');
@@ -321,7 +319,7 @@ export default {
     async deleteAdmin(adminId) {
       const token = localStorage.getItem('token');
       try {
-        await axios.delete(`http://localhost:8000/api/admin/admins/${adminId}`, {
+        await axios.delete(`/admin/admins/${adminId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.admins = this.admins.filter((admin) => admin.id !== adminId);

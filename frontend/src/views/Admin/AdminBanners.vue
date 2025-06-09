@@ -289,7 +289,7 @@ export default {
         if (this.positionFilter !== 'all') params.position = this.positionFilter;
         if (this.searchQuery) params.title = this.searchQuery;
         console.log('Fetching banners with:', { token, params });
-        const response = await axios.get('http://localhost:8000/api/admin/banners', {
+        const response = await axios.get('/admin/banners', {
           headers: { Authorization: `Bearer ${token}` },
           params,
         });
@@ -326,7 +326,7 @@ export default {
         let response;
         if (this.modalMode === 'add') {
           response = await axios.post(
-            'http://localhost:8000/api/admin/banners',
+            '/admin/banners',
             form,
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -334,7 +334,7 @@ export default {
           alert('Thêm banner thành công');
         } else if (this.modalMode === 'edit') {
           response = await axios.put(
-            `http://localhost:8000/api/admin/banners/${this.selectedBanner.id}`,
+            `/admin/banners/${this.selectedBanner.id}`,
             form,
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -343,7 +343,7 @@ export default {
           alert('Cập nhật banner thành công');
         } else if (this.modalMode === 'delete') {
           await axios.delete(
-            `http://localhost:8000/api/admin/banners/${this.selectedBanner.id}`,
+            `/admin/banners/${this.selectedBanner.id}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
           this.banners = this.banners.filter(b => b.id !== this.selectedBanner.id);

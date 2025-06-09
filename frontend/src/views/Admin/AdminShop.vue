@@ -178,7 +178,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/shops', {
+        const response = await axios.get('/admin/shops', {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Phản hồi API:', response.data); // Debug dữ liệu trả về
@@ -223,7 +223,7 @@ export default {
       }
       try {
         await axios.put(
-          `http://localhost:8000/api/admin/shops/${shop.id}/status`,
+          `/admin/shops/${shop.id}/status`,
           { status: this.newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -242,7 +242,7 @@ export default {
         return;
       }
       try {
-        await axios.delete(`http://localhost:8000/api/admin/shops/${shopId}`, {
+        await axios.delete(`/admin/shops/${shopId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.shops = this.shops.filter((shop) => shop.id !== shopId);

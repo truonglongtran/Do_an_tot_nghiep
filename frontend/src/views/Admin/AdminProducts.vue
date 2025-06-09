@@ -352,7 +352,7 @@ export default {
       const token = localStorage.getItem('token');
       try {
         if (!token) throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
-        const response = await axios.get('http://localhost:8000/api/admin/products', {
+        const response = await axios.get('/admin/products', {
           headers: { Authorization: `Bearer ${token}` },
           params: {
             search: this.searchQuery,
@@ -376,7 +376,7 @@ export default {
       try {
         if (!token) throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         await axios.patch(
-          `http://localhost:8000/api/admin/products/${productId}/status`,
+          `/admin/products/${productId}/status`,
           { status: newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -401,7 +401,7 @@ export default {
       try {
         if (!token) throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         await axios.patch(
-          `http://localhost:8000/api/admin/variants/${variantId}/status`,
+          `/admin/variants/${variantId}/status`,
           { status: newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -436,7 +436,7 @@ export default {
       try {
         if (!token) throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         this.deletingProduct = productId;
-        await axios.delete(`http://localhost:8000/api/admin/products/${productId}`, {
+        await axios.delete(`/admin/products/${productId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.allProducts = this.allProducts.filter(product => product.id !== productId);

@@ -195,7 +195,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/disputes', {
+        const response = await axios.get('/admin/disputes', {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Phản hồi API:', response.data);
@@ -226,7 +226,7 @@ export default {
       }
       try {
         await axios.put(
-          `http://localhost:8000/api/admin/disputes/${dispute.id}/status`,
+          `/admin/disputes/${dispute.id}/status`,
           { status: this.newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -247,7 +247,7 @@ export default {
       }
       try {
         await axios.put(
-          `http://localhost:8000/api/admin/disputes/${dispute.id}/status`,
+          `/admin/disputes/${dispute.id}/status`,
           { status: dispute.status, admin_note: note },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -265,7 +265,7 @@ export default {
         return;
       }
       try {
-        await axios.delete(`http://localhost:8000/api/admin/disputes/${disputeId}`, {
+        await axios.delete(`/admin/disputes/${disputeId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.disputes = this.disputes.filter((dispute) => dispute.id !== disputeId);
