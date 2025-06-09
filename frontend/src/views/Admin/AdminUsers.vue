@@ -214,7 +214,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/users', {
+        const response = await axios.get('/admin/users', {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Phản hồi API:', response.data); // Debug dữ liệu trả về
@@ -257,12 +257,12 @@ export default {
       try {
         const response = this.editingUser
           ? await axios.put(
-              `http://localhost:8000/api/admin/users/${this.editingUser.id}`,
+              `/admin/users/${this.editingUser.id}`,
               form,
               { headers: { Authorization: `Bearer ${token}` } }
             )
           : await axios.post(
-              'http://localhost:8000/api/admin/users',
+              '/admin/users',
               { ...form, status: 'active' },
               { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -307,7 +307,7 @@ export default {
       }
       try {
         await axios.put(
-          `http://localhost:8000/api/admin/users/${user.id}/status`,
+          `/admin/users/${user.id}/status`,
           { status: this.newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -328,7 +328,7 @@ export default {
         return;
       }
       try {
-        await axios.delete(`http://localhost:8000/api/admin/users/${userId}`, {
+        await axios.delete(`/admin/users/${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.users = this.users.filter((user) => user.id !== userId);

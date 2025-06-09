@@ -139,7 +139,7 @@ export default {
         if (this.searchQuery) params.file_url = this.searchQuery;
         if (this.startDate) params.start_date = this.startDate;
         if (this.endDate) params.end_date = this.endDate;
-        const response = await axios.get('http://localhost:8000/api/admin/reports', {
+        const response = await axios.get('/admin/reports', {
           headers: { Authorization: `Bearer ${token}` },
           params,
         });

@@ -218,7 +218,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/payments', {
+        const response = await axios.get('/admin/payments', {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Phản hồi API:', response.data);
@@ -258,7 +258,7 @@ export default {
       }
       try {
         await axios.put(
-          `http://localhost:8000/api/admin/payments/${payment.id}/status`,
+          `/admin/payments/${payment.id}/status`,
           { status: this.newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -278,7 +278,7 @@ export default {
         return;
       }
       try {
-        await axios.delete(`http://localhost:8000/api/admin/payments/${paymentId}`, {
+        await axios.delete(`/admin/payments/${paymentId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.payments = this.payments.filter((payment) => payment.id !== paymentId);

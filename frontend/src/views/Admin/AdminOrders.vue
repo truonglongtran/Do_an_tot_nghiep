@@ -307,7 +307,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/orders', {
+        const response = await axios.get('/admin/orders', {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Phản hồi API:', response.data);
@@ -356,7 +356,7 @@ export default {
           throw new Error('Trạng thái mới không hợp lệ');
         }
         const payload = { [this.statusField]: this.newStatus };
-        const endpoint = `http://localhost:8000/api/admin/orders/${order.id}/${this.statusField.replace('_status', '-status')}`;
+        const endpoint = `/admin/orders/${order.id}/${this.statusField.replace('_status', '-status')}`;
         const response = await axios.put(endpoint, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -381,7 +381,7 @@ export default {
         return;
       }
       try {
-        await axios.delete(`http://localhost:8000/api/admin/orders/${orderId}`, {
+        await axios.delete(`/admin/orders/${orderId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.orders = this.orders.filter((order) => order.id !== orderId);

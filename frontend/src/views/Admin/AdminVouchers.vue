@@ -456,7 +456,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/vouchers', {
+        const response = await axios.get('/admin/vouchers', {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.vouchers = response.data;
@@ -479,7 +479,7 @@ export default {
         return;
       }
       try {
-        const response = await axios.get('http://localhost:8000/api/admin/shops', {
+        const response = await axios.get('/admin/shops', {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.shops = response.data;
@@ -504,7 +504,7 @@ export default {
         return;
       }
       try {
-        const response = await axios.get('http://localhost:8000/api/admin/products', {
+        const response = await axios.get('/admin/products', {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.products = response.data;
@@ -529,7 +529,7 @@ export default {
         return;
       }
       try {
-        const response = await axios.get('http://localhost:8000/api/admin/shipping-partners', {
+        const response = await axios.get('/admin/shipping-partners', {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.shippingPartners = response.data;
@@ -556,12 +556,12 @@ export default {
       try {
         const response = this.editingVoucher
           ? await axios.put(
-              `http://localhost:8000/api/admin/vouchers/${this.editingVoucher.id}`,
+              `/admin/vouchers/${this.editingVoucher.id}`,
               form,
               { headers: { Authorization: `Bearer ${token}` } }
             )
           : await axios.post(
-              'http://localhost:8000/api/admin/vouchers',
+              '/admin/vouchers',
               form,
               { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -598,7 +598,7 @@ export default {
         return;
       }
       try {
-        await axios.delete(`http://localhost:8000/api/admin/vouchers/${voucherId}`, {
+        await axios.delete(`/admin/vouchers/${voucherId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.vouchers = this.vouchers.filter((voucher) => voucher.id !== voucherId);

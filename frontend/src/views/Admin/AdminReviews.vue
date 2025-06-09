@@ -103,13 +103,13 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('http://localhost:8000/api/admin/reviews', {
+        const response = await axios.get('/admin/reviews', {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('Backend response:', response.data); // Debug backend data
         // Temporarily force frontend calculation to ensure correct counts
         this.shops = await Promise.all(response.data.map(async (shop) => {
-          const reviewsResponse = await axios.get(`http://localhost:8000/api/admin/reviews/${shop.id}`, {
+          const reviewsResponse = await axios.get(`/admin/reviews/${shop.id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           const reviews = reviewsResponse.data;

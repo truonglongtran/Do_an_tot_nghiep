@@ -184,7 +184,7 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get(`http://localhost:8000/api/admin/reviews/${shopId}`, {
+        const response = await axios.get(`/admin/reviews/${shopId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         this.reviews = response.data;
