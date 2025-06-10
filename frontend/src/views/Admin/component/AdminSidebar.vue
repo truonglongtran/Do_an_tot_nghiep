@@ -99,7 +99,7 @@ export default {
 
       try {
         const response = await axios.post(
-          `http://localhost:8000/api/${loginType}/logout`,
+          `/${loginType}/logout`,
           {},
           {
             headers: {
