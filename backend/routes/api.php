@@ -1,17 +1,17 @@
 <?php
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\ShopController;
-use App\Http\Controllers\Api\AdminController;
-use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\OrderController;
-use App\Http\Controllers\Api\DisputeController;
-use App\Http\Controllers\Api\VoucherController;
-use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\ShippingPartnerController;
-use App\Http\Controllers\Api\BannerController;
-use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\Admin\AuthController;
+use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\Admin\ShopController;
+use App\Http\Controllers\Api\Admin\AdminController;
+use App\Http\Controllers\Api\Admin\ProductController;
+use App\Http\Controllers\Api\Admin\OrderController;
+use App\Http\Controllers\Api\Admin\DisputeController;
+use App\Http\Controllers\Api\Admin\VoucherController;
+use App\Http\Controllers\Api\Admin\PaymentController;
+use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\ShippingPartnerController;
+use App\Http\Controllers\Api\Admin\BannerController;
+use App\Http\Controllers\Api\Admin\ReviewController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 

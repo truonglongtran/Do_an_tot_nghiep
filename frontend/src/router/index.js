@@ -9,7 +9,17 @@ const routes = [
     path: '/admin/login',
     name: 'AdminLogin',
     component: Login,
-    meta: { requiresGuest: true }, // Add requiresGuest to prevent access when logged in
+    meta: { requiresGuest: true },
+  },
+  {
+    path: '/seller/login',
+    name: 'SellerLogin',
+    component: Login,
+  },
+  {
+    path: '/buyer/login',
+    name: 'BuyerLogin',
+    component: Login,
   },
   {
     path: '/admin',
