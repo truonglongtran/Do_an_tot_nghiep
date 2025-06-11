@@ -1,5 +1,5 @@
 <?php
-use App\Http\Controllers\Api\Admin\AuthController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Admin\ShopController;
 use App\Http\Controllers\Api\Admin\AdminController;
@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\ShippingPartnerController;
 use App\Http\Controllers\Api\Admin\BannerController;
 use App\Http\Controllers\Api\Admin\ReviewController;
+use App\Http\Controllers\Api\Seller\OrderController as SellerOrderController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -114,7 +115,14 @@ Route::prefix('admin')->group(function () {
 
 Route::prefix('seller')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+
+    Route::middleware(['auth:sanctum', 'role:seller'])->group(function () {
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/stats', [DashboardController::class, 'stats'])->name('seller.stats');
+        Route::get('/orders', [SellerOrderController::class, 'index'])->name('seller.orders.index');
+        Route::get('/orders/{id}', [SellerOrderController::class, 'show'])->name('seller.orders.show');
+        Route::put('/orders/{id}/shipping-status', [SellerOrderController::class, 'updateShippingStatus'])->name('seller.orders.updateShippingStatus');
+    });
 });
 
 Route::prefix('buyer')->group(function () {

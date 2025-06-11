@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Login from '../views/Login/Login.vue';
 import AdminLayout from '../views/Admin/AdminLayout.vue';
-import SellerDashboard from '../views/Seller/SellerDashboard.vue';
+import SellerLayout from '../views/Seller/SellerLayout.vue';
 import BuyerDashboard from '../views/Buyer/BuyerDashboard.vue';
 
 const routes = [
@@ -196,11 +196,32 @@ const routes = [
     ],
   },
   {
-    path: '/seller/dashboard',
-    name: 'SellerDashboard',
-    component: SellerDashboard,
+    path: '/seller',
+    component: SellerLayout,
     meta: { requiresAuth: true, roles: ['seller'], loginPath: '/seller/login' },
-  },
+    children: [
+      {
+        path: 'dashboard',
+        component: () => import('@/views/Seller/SellerDashboard.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: {
+            seller: ['view'],
+          },
+        },
+      },
+      {
+        path: 'orders',
+        component: () => import('@/views/Seller/SellerOrders.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: {
+            seller: ['view', 'update'],
+          },
+        },
+      },
+    ],
+  },  
   {
     path: '/buyer/dashboard',
     name: 'BuyerDashboard',

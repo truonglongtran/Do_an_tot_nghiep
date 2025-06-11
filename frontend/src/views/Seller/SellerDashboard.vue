@@ -2,7 +2,6 @@
     <div class="p-6">
       <h1 class="text-2xl font-bold">Bảng điều khiển Người bán</h1>
       <p>Xin chào, Người bán!</p>
-      <button @click="logout" class="mt-4 bg-red-500 text-white p-2 rounded">Đăng xuất</button>
     </div>
   </template>
   
