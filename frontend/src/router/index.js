@@ -215,9 +215,47 @@ const routes = [
         component: () => import('@/views/Seller/SellerOrders.vue'),
         meta: {
           roles: ['seller'],
-          permissions: {
-            seller: ['view', 'update'],
-          },
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'orders/delivery',
+        component: () => import('@/views/Seller/SellerOrders.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'orders/returns',
+        component: () => import('@/views/Seller/SellerOrders.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'shipping/settings',
+        component: () => import('@/views/Seller/SellerShippingSettings.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'products/all',
+        component: () => import('@/views/Seller/SellerProductsAll.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'products/add',
+        component: () => import('@/views/Seller/SellerProductsAdd.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
         },
       },
     ],

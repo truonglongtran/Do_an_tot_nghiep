@@ -1,105 +1,213 @@
 <template>
-  <div class="container mx-auto">
-    <h2 class="text-2xl font-bold mb-6">Quản lý đơn hàng</h2>
-    <div class="bg-white p-6 rounded-lg shadow">
-      <h3 class="text-lg font-semibold mb-4">Danh sách đơn hàng</h3>
-      <table class="w-full table-auto">
-        <thead>
-          <tr class="bg-gray-200">
-            <th class="p-2">ID</th>
-            <th class="p-2">Người mua</th>
-            <th class="p-2">Tổng tiền</th>
-            <th class="p-2">Trạng thái đơn</th>
-            <th class="p-2">Trạng thái vận chuyển</th>
-            <th class="p-2">Hành động</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="order in orders" :key="order.id" class="border-b">
-            <td class="p-2">{{ order.id }}</td>
-            <td class="p-2">{{ order.buyer ? order.buyer.email : 'N/A' }}</td>
-            <td class="p-2">{{ formatCurrency(order.total_amount) }}</td>
-            <td class="p-2">{{ order.order_status }}</td>
-            <td class="p-2">
-              <select
-                v-model="order.shipping_status"
-                @change="updateShippingStatus(order.id, $event.target.value)"
-                class="border rounded p-1"
-              >
-                <option value="pending">Chờ xử lý</option>
-                <option value="processing">Đang xử lý</option>
-                <option value="shipping">Đang vận chuyển</option>
-                <option value="delivered">Đã giao</option>
-                <option value="failed">Thất bại</option>
-                <option value="return">Hoàn trả</option>
-              </select>
-            </td>
-            <td class="p-2">
-              <router-link
-                :to="`/seller/orders/${order.id}`"
-                class="text-blue-500 hover:underline"
-              >
-                Xem chi tiết
-              </router-link>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+  <div class="p-6 space-y-6">
+    <h1 class="text-2xl font-bold">{{ pageTitle }}</h1>
+    <div v-if="orders.length === 0" class="text-center text-gray-500">
+      Không tìm thấy đơn hàng nào.
     </div>
+    <table v-else class="min-w-full table-auto border border-gray-300">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="px-4 py-2 border">ID</th>
+          <th class="px-4 py-2 border">Người mua</th>
+          <th class="px-4 py-2 border">Tổng tiền</th>
+          <th class="px-4 py-2 border">Trạng thái đơn</th>
+          <th class="px-4 py-2 border">Vận chuyển</th>
+          <th class="px-4 py-2 border">Hành động</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="order in orders" :key="order.id" class="hover:bg-gray-50 border-b">
+          <td class="px-4 py-2 border text-center">{{ order.id }}</td>
+          <td class="px-4 py-2 border text-center">{{ order.buyer?.email || 'N/A' }}</td>
+          <td class="px-4 py-2 border text-right">{{ formatCurrency(order.total_amount) }}</td>
+          <td class="px-4 py-2 border text-center">{{ statusText.order[order.order_status] || 'N/A' }}</td>
+          <td class="px-4 py-2 border text-center">{{ statusText.shipping[order.shipping_status] || 'N/A' }}</td>
+          <td class="px-4 py-2 border text-center">
+            <button
+              @click="openDetailModal(order)"
+              class="text-blue-600 hover:underline"
+            >
+              Chi tiết
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <GenericDetailsModal
+      :show="showOrderDetailsModal"
+      :data="selectedOrder"
+      :fields="orderFields"
+      :title="`Chi tiết đơn hàng #${selectedOrder?.id || ''}`"
+      @close="closeDetailModal"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import GenericDetailsModal from './GenericDetailsModal.vue';
+import { useRoute } from 'vue-router';
 
 export default {
   name: 'SellerOrders',
+  components: { GenericDetailsModal },
+  setup() {
+    return { route: useRoute() };
+  },
   data() {
     return {
       orders: [],
+      showOrderDetailsModal: false,
+      selectedOrder: null,
+      statusText: {
+        order: {
+          pending: 'Chờ xác nhận',
+          paid: 'Đã thanh toán',
+          canceled: 'Đã hủy',
+        },
+        shipping: {
+          pending: 'Chờ xử lý',
+          processing: 'Đang xử lý',
+          shipping: 'Đang giao',
+          delivered: 'Đã giao',
+          failed: 'Thất bại',
+          return: 'Trả hàng',
+        },
+      },
+      orderFields: [
+        { label: 'ID Đơn hàng', key: 'id', type: 'text' },
+        { label: 'Email người mua', key: 'buyer.email', type: 'text' },
+        {
+          label: 'Tổng tiền',
+          key: 'total_amount',
+          type: 'custom',
+          customFormat: (value) => this.formatCurrency(value || 0),
+        },
+        {
+          label: 'Trạng thái đơn',
+          key: 'order_status',
+          type: 'custom',
+          customFormat: (value) => this.statusText.order[value] || 'N/A',
+        },
+        {
+          label: 'Trạng thái vận chuyển',
+          key: 'shipping_status',
+          type: 'custom',
+          customFormat: (value) => this.statusText.shipping[value] || 'N/A',
+        },
+        {
+          label: 'Ngày tạo',
+          key: 'created_at',
+          type: 'date',
+          customFormat: (value) => this.formatDate(value),
+        },
+        {
+          label: 'Sản phẩm',
+          key: 'items',
+          type: 'custom',
+          customFormat: (items) => {
+            if (!items || !Array.isArray(items) || items.length === 0) {
+              return 'Không có sản phẩm';
+            }
+            return `
+              <table class="min-w-full border">
+                <thead>
+                  <tr>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Sản phẩm</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Màu</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Kích cỡ</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-center">Số lượng</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-right">Giá</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${items
+                    .map(
+                      (item) => `
+                        <tr>
+                          <td class="px-4 py-2 border">${item.product?.name || 'N/A'}</td>
+                          <td class="px-4 py-2 border">${item.product_variant?.color || 'N/A'}</td>
+                          <td class="px-4 py-2 border">${item.product_variant?.size || 'N/A'}</td>
+                          <td class="px-4 py-2 border text-center">${item.quantity || 0}</td>
+                          <td class="px-4 py-2 border text-right">${this.formatCurrency(item.product_variant?.price || 0)}</td>
+                        </tr>
+                      `
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            `;
+          },
+        },
+      ],
     };
+  },
+  computed: {
+    pageTitle() {
+      return this.route.path.includes('/delivery') ? 'Bàn giao đơn hàng' :
+             this.route.path.includes('/returns') ? 'Đơn trả hàng/Hoàn tiền/Đơn hủy' :
+             'Quản lý đơn hàng';
+    },
+    filterParams() {
+      if (this.route.path.includes('/delivery')) {
+        return { shipping_status: ['shipping', 'delivered'] };
+      } else if (this.route.path.includes('/returns')) {
+        return { shipping_status: ['return'], order_status: ['canceled'] };
+      }
+      return {};
+    }
   },
   methods: {
     async fetchOrders() {
       try {
         const token = localStorage.getItem('token');
-        if (!token) throw new Error('No token found');
+        if (!token) {
+          alert('Vui lòng đăng nhập lại');
+          return;
+        }
 
         const response = await axios.get('http://localhost:8000/api/seller/orders', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+          params: this.filterParams,
+          headers: { Authorization: `Bearer ${token}` },
         });
-        this.orders = response.data.data;
-        console.log('Danh sách đơn hàng:', this.orders);
+
+        this.orders = response.data.data || [];
+        console.log('Fetched seller orders:', JSON.stringify(this.orders, null, 2));
+        this.orders.forEach(order => {
+          console.log(`Order ${order.id} items:`, order.items.map(item => ({
+            product_name: item.product?.name,
+            variant_color: item.product_variant?.color,
+            variant_size: item.product_variant?.size,
+            variant_price: item.product_variant?.price,
+            quantity: item.quantity,
+          })));
+        });
       } catch (error) {
-        console.error('Lỗi khi tải đơn hàng:', error);
+        console.error('Error fetching orders:', error);
         alert('Không thể tải dữ liệu: ' + (error.response?.data?.message || 'Lỗi không xác định'));
       }
     },
-    async updateShippingStatus(orderId, shippingStatus) {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await axios.put(
-          `http://localhost:8000/api/seller/orders/${orderId}/shipping-status`,
-          { shipping_status: shippingStatus },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-        alert('Cập nhật trạng thái vận chuyển thành công');
-        console.log('Phản hồi cập nhật:', response.data);
-      } catch (error) {
-        console.error('Lỗi khi cập nhật trạng thái vận chuyển:', error);
-        alert('Cập nhật thất bại: ' + (error.response?.data?.message || 'Lỗi không xác định'));
-      }
-    },
     formatCurrency(amount) {
-      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
+    },
+    formatDate(date) {
+      if (!date) return 'N/A';
+      return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date));
+    },
+    openDetailModal(order) {
+      this.selectedOrder = { ...order };
+      this.showOrderDetailsModal = true;
+      console.log('Opening modal for order:', order.id, 'items:', order.items);
+    },
+    closeDetailModal() {
+      this.showOrderDetailsModal = false;
+      this.selectedOrder = null;
+    },
+  },
+  watch: {
+    'route.path'() {
+      this.fetchOrders();
     },
   },
   mounted() {

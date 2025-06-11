@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\Admin\ShippingPartnerController;
 use App\Http\Controllers\Api\Admin\BannerController;
 use App\Http\Controllers\Api\Admin\ReviewController;
 use App\Http\Controllers\Api\Seller\OrderController as SellerOrderController;
+use App\Http\Controllers\Api\Seller\ShippingPartnerController as SellerShippingPartnerController;
+use App\Http\Controllers\Api\Seller\ProductController as SellerProductController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -118,10 +120,12 @@ Route::prefix('seller')->group(function () {
 
     Route::middleware(['auth:sanctum', 'role:seller'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/stats', [DashboardController::class, 'stats'])->name('seller.stats');
-        Route::get('/orders', [SellerOrderController::class, 'index'])->name('seller.orders.index');
-        Route::get('/orders/{id}', [SellerOrderController::class, 'show'])->name('seller.orders.show');
-        Route::put('/orders/{id}/shipping-status', [SellerOrderController::class, 'updateShippingStatus'])->name('seller.orders.updateShippingStatus');
+        Route::get('/orders', [SellerOrderController::class, 'index']);
+        Route::get('/orders/{id}', [SellerOrderController::class, 'show']);
+        Route::get('/shipping-partners', [SellerShippingPartnerController::class, 'index']);
+        Route::post('/shipping-partners/toggle', [SellerShippingPartnerController::class, 'toggle']);
+        Route::get('/products', [SellerProductController::class, 'index']);
+        Route::post('/products', [SellerProductController::class, 'store']);
     });
 });
 

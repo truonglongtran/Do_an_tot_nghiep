@@ -63,7 +63,7 @@ export default {
           { to: '/seller/orders', label: 'Tất cả' },
           { to: '/seller/orders/delivery', label: 'Bàn giao đơn hàng' },
           { to: '/seller/orders/returns', label: 'Đơn trả hàng/Hoàn tiền/Đơn hủy' },
-          { to: '/seller/orders/shipping-settings', label: 'Cài đặt vận chuyển' },
+          { to: '/seller/shipping/settings', label: 'Cài đặt vận chuyển' },
         ],
       },
       {
