@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Admin\ShopController;
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\ProductController;
+use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\OrderController;
 use App\Http\Controllers\Api\Admin\DisputeController;
 use App\Http\Controllers\Api\Admin\VoucherController;
@@ -15,6 +16,8 @@ use App\Http\Controllers\Api\Admin\ReviewController;
 use App\Http\Controllers\Api\Seller\OrderController as SellerOrderController;
 use App\Http\Controllers\Api\Seller\ShippingPartnerController as SellerShippingPartnerController;
 use App\Http\Controllers\Api\Seller\ProductController as SellerProductController;
+use App\Http\Controllers\Api\Seller\CategoryController as SellerCategoryController;
+use App\Http\Controllers\Api\Seller\ReviewController as SellerReviewController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -58,6 +61,9 @@ Route::prefix('admin')->group(function () {
         Route::patch('/variants/{id}/status', [ProductController::class, 'updateVariantStatus'])->name('variants.updateStatus');
         Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 
+        // Category management
+        Route::get('categories', [CategoryController::class, 'index']);
+        Route::get('categories/{categoryId}/attributes', [CategoryController::class, 'attributes']);        
         // Order management
         Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/{id}', [OrderController::class, 'show'])->name('orders.show');
@@ -126,6 +132,9 @@ Route::prefix('seller')->group(function () {
         Route::post('/shipping-partners/toggle', [SellerShippingPartnerController::class, 'toggle']);
         Route::get('/products', [SellerProductController::class, 'index']);
         Route::post('/products', [SellerProductController::class, 'store']);
+        Route::get('categories', [SellerCategoryController::class, 'index']);
+        Route::get('categories/{categoryId}/attributes', [SellerCategoryController::class, 'attributes']);
+         Route::get('reviews', [SellerReviewController::class, 'showReviews']);
     });
 });
 

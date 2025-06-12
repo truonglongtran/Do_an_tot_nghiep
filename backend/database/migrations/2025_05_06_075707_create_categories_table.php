@@ -7,14 +7,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('products', function (Blueprint $table) {
+        Schema::create('categories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('shop_id')->constrained('shops');
-            $table->foreignId('category_id')->constrained('categories');
-            $table->string('name');
+            $table->string('name'); 
+            $table->string('slug')->unique();
             $table->text('description')->nullable();
-            $table->json('images')->nullable(); 
-            $table->enum('status', ['pending', 'approved', 'banned'])->default('pending');
             $table->timestamps();
             $table->softDeletes();
         });
@@ -22,6 +19,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('products');
+        Schema::dropIfExists('categories');
     }
 };

@@ -13,22 +13,25 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Product::with(['variants' => function ($query) {
-                $query->whereNull('deleted_at');
-            }])->whereNull('deleted_at');
+            $query = Product::with([
+                'category' => fn($q) => $q->select('id', 'name'),
+                'variants.attributes' => fn($q) => $q->select('product_variant_attributes.id', 'product_variant_attributes.product_variant_id', 
+                    'attributes.name as attribute_name', 'attribute_values.value as attribute_value')
+                    ->join('attributes', 'product_variant_attributes.attribute_id', '=', 'attributes.id')
+                    ->join('attribute_values', 'product_variant_attributes.attribute_value_id', '=', 'attribute_values.id')
+            ])->whereNull('deleted_at');
 
-            // Search by name
             if ($request->has('search') && !empty($request->search)) {
                 $query->where('name', 'like', '%' . $request->search . '%');
             }
-
-            // Filter by status
             if ($request->has('status') && in_array($request->status, ['pending', 'approved', 'banned'])) {
                 $query->where('status', $request->status);
             }
+            if ($request->has('category_id') && is_numeric($request->category_id)) {
+                $query->where('category_id', $request->category_id);
+            }
 
             $products = $query->get();
-
             return response()->json($products);
         } catch (\Exception $e) {
             Log::error('Error in ProductController::index: ' . $e->getMessage(), ['exception' => $e]);
@@ -39,9 +42,13 @@ class ProductController extends Controller
     public function show($id)
     {
         try {
-            $product = Product::with(['variants' => function ($query) {
-                $query->whereNull('deleted_at');
-            }])->whereNull('deleted_at')->findOrFail($id);
+            $product = Product::with([
+                'category' => fn($q) => $q->select('id', 'name'),
+                'variants.attributes' => fn($q) => $q->select('product_variant_attributes.id', 'product_variant_attributes.product_variant_id', 
+                    'attributes.name as attribute_name', 'attribute_values.value as attribute_value')
+                    ->join('attributes', 'product_variant_attributes.attribute_id', '=', 'attributes.id')
+                    ->join('attribute_values', 'product_variant_attributes.attribute_value_id', '=', 'attribute_values.id')
+            ])->whereNull('deleted_at')->findOrFail($id);
             return response()->json($product);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['error' => 'Product not found'], 404);

@@ -1,10 +1,10 @@
 <?php
-
 namespace App\Http\Controllers\Api\Seller;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\ProductVariantAttribute;
 use App\Models\Shop;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +17,7 @@ class ProductController extends Controller
     {
         try {
             $sellerId = $request->user()->id;
-            $shop = Shop::where('owner_id', $sellerId)->first();
+            $shop = Shop::where('user_id', $sellerId)->first();
             if (!$shop) {
                 return response()->json([
                     'success' => false,
@@ -26,9 +26,18 @@ class ProductController extends Controller
             }
 
             $query = Product::where('shop_id', $shop->id)
-                ->with(['variants' => function ($q) {
-                    $q->select('product_id', 'color', 'size', 'sku', 'price', 'stock', 'image_url', 'status');
-                }]);
+                ->with([
+                    'category' => fn($q) => $q->select('id', 'name'),
+                    'variants' => fn($q) => $q->select('id', 'product_id', 'sku', 'price', 'stock', 'image_url', 'status'),
+                    'variants.attributes' => fn($q) => $q->select(
+                        'product_variant_attributes.id',
+                        'product_variant_attributes.product_variant_id',
+                        'attributes.name as attribute_name',
+                        'attribute_values.value as attribute_value'
+                    )
+                    ->join('attributes', 'product_variant_attributes.attribute_id', '=', 'attributes.id')
+                    ->join('attribute_values', 'product_variant_attributes.attribute_value_id', '=', 'attribute_values.id')
+                ]);
 
             // Tìm kiếm
             if ($search = $request->input('search')) {
@@ -43,36 +52,43 @@ class ProductController extends Controller
                 $query->where('status', $status);
             }
             if ($stockMin = $request->input('stock_min')) {
-                $query->whereHas('variants', function ($q) use ($stockMin) {
-                    $q->where('stock', '>=', $stockMin);
-                });
+                $query->whereHas('variants', fn($q) => $q->where('stock', '>=', $stockMin));
             }
             if ($stockMax = $request->input('stock_max')) {
-                $query->whereHas('variants', function ($q) use ($stockMax) {
-                    $q->where('stock', '<=', $stockMax);
-                });
+                $query->whereHas('variants', fn($q) => $q->where('stock', '<=', $stockMax));
             }
             if ($priceMin = $request->input('price_min')) {
-                $query->whereHas('variants', function ($q) use ($priceMin) {
-                    $q->where('price', '>=', $priceMin);
-                });
+                $query->whereHas('variants', fn($q) => $q->where('price', '>=', $priceMin));
             }
             if ($priceMax = $request->input('price_max')) {
-                $query->whereHas('variants', function ($q) use ($priceMax) {
-                    $q->where('price', '<=', $priceMax);
-                });
+                $query->whereHas('variants', fn($q) => $q->where('price', '<=', $priceMax));
             }
 
             $products = $query->get()->map(function ($product) {
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
-                    'thumbnail' => $product->variants->first()->image_url ?? null,
+                    'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
+                    'images' => $product->images ?? [],
+                    'thumbnail' => $product->images[0] ?? ($product->variants->first()->image_url ?? null),
                     'price_min' => $product->variants->min('price'),
                     'price_max' => $product->variants->max('price'),
                     'total_stock' => $product->variants->sum('stock'),
                     'status' => $product->status,
-                    'variants' => $product->variants,
+                    'variants' => $product->variants->map(function ($variant) {
+                        return [
+                            'id' => $variant->id,
+                            'sku' => $variant->sku,
+                            'price' => $variant->price,
+                            'stock' => $variant->stock,
+                            'image_url' => $variant->image_url,
+                            'status' => $variant->status,
+                            'attributes' => $variant->attributes->map(fn($attr) => [
+                                'name' => $attr->attribute_name,
+                                'value' => $attr->attribute_value,
+                            ]),
+                        ];
+                    }),
                 ];
             });
 
@@ -102,7 +118,7 @@ class ProductController extends Controller
     {
         try {
             $sellerId = $request->user()->id;
-            $shop = Shop::where('owner_id', $sellerId)->first();
+            $shop = Shop::where('user_id', $sellerId)->first();
             if (!$shop) {
                 return response()->json([
                     'success' => false,
@@ -113,50 +129,72 @@ class ProductController extends Controller
             $request->validate([
                 'name' => 'required|string|max:255',
                 'description' => 'nullable|string',
-                'variants.*.color' => 'nullable|string',
-                'variants.*.size' => 'nullable|string',
+                'category_id' => 'required|exists:categories,id',
+                'images' => 'required|array|min:1',
+                'images.*' => 'file|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+                'variants' => 'required|array|min:1',
                 'variants.*.sku' => 'required|string|unique:product_variants,sku',
                 'variants.*.price' => 'required|numeric|min:0',
                 'variants.*.stock' => 'required|integer|min:0',
                 'variants.*.image' => 'nullable|file|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+                'variants.*.attributes' => 'required|array',
+                'variants.*.attributes.*.attribute_id' => 'required|exists:attributes,id',
+                'variants.*.attributes.*.attribute_value_id' => 'required|exists:attribute_values,id',
                 'shipping_partners' => 'array',
                 'shipping_partners.*' => 'exists:shipping_partners,id',
             ]);
 
-            DB::transaction(function () use ($request, $shop) {
+            $imageUrls = [];
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                    $imageUrls[] = $image->store('products', 'public');
+                }
+            }
+
+            $product = null;
+            DB::transaction(function () use ($request, $shop, $imageUrls, &$product) {
                 $product = Product::create([
                     'shop_id' => $shop->id,
                     'name' => $request->input('name'),
                     'description' => $request->input('description'),
+                    'category_id' => $request->input('category_id'),
+                    'images' => json_encode($imageUrls),
                     'status' => 'pending',
                 ]);
 
                 $variants = $request->input('variants', []);
-                foreach ($variants as $variant) {
+                foreach ($variants as $index => $variant) {
                     $imagePath = null;
-                    if ($request->hasFile("variants.{$variant['index']}.image")) {
-                        $imagePath = $request->file("variants.{$variant['index']}.image")->store('variants', 'public');
+                    if ($request->hasFile("variants.{$index}.image")) {
+                        $imagePath = $request->file("variants.{$index}.image")->store('variants', 'public');
                     }
 
-                    ProductVariant::create([
+                    $productVariant = ProductVariant::create([
                         'product_id' => $product->id,
-                        'color' => $variant['color'] ?? null,
-                        'size' => $variant['size'] ?? null,
                         'sku' => $variant['sku'],
                         'price' => $variant['price'],
                         'stock' => $variant['stock'],
                         'image_url' => $imagePath,
                         'status' => 'active',
                     ]);
+
+                    // Lưu thuộc tính động
+                    foreach ($variant['attributes'] as $attr) {
+                        ProductVariantAttribute::create([
+                            'product_variant_id' => $productVariant->id,
+                            'attribute_id' => $attr['attribute_id'],
+                            'attribute_value_id' => $attr['attribute_value_id'],
+                        ]);
+                    }
                 }
 
                 // Gán đơn vị vận chuyển (nếu cần)
                 if ($request->has('shipping_partners')) {
-                    // Logic gán đơn vị vận chuyển cho sản phẩm (chưa triển khai chi tiết)
                     Log::info('Shipping partners assigned', [
                         'product_id' => $product->id,
                         'shipping_partners' => $request->input('shipping_partners'),
                     ]);
+                    // TODO: Implement shipping partner assignment logic
                 }
             });
 
@@ -169,7 +207,16 @@ class ProductController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Thêm sản phẩm thành công',
-            ]);
+                'data' => [
+                    'product_id' => $product->id,
+                ],
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dữ liệu không hợp lệ',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             Log::error('Error creating product', [
                 'seller_id' => $request->user()->id,

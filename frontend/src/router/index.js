@@ -258,6 +258,18 @@ const routes = [
           permissions: { seller: ['view', 'update'] },
         },
       },
+      {
+        path: '/shop/profile',
+        name: 'SellerShopProfile',
+        component: () => import('@/views/Seller/SellerShopProfile.vue'),
+        meta: { requiresAuth: true, role: 'seller' },
+      },
+      {
+        path: '/shop/settings',
+        name: 'SellerShopSettings',
+        component: () => import('@/views/Seller/SellerShopSettings.vue'),
+        meta: { requiresAuth: true, role: 'seller' },
+      },
     ],
   },  
   {
