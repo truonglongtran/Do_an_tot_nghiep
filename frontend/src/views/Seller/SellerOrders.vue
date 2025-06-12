@@ -1,7 +1,16 @@
 <template>
   <div class="p-6 space-y-6">
     <h1 class="text-2xl font-bold">{{ pageTitle }}</h1>
-    <div v-if="orders.length === 0" class="text-center text-gray-500">
+    <div class="flex justify-between items-center">
+      <FilterSearch
+        :filters="filters"
+        :searchPlaceholder="'Tìm kiếm theo email người mua...'"
+        v-model:currentFilter="currentFilter"
+        v-model:searchQuery="searchQuery"
+        @search="applySearch"
+      />
+    </div>
+    <div v-if="filteredOrders.length === 0" class="text-center text-gray-500">
       Không tìm thấy đơn hàng nào.
     </div>
     <table v-else class="min-w-full table-auto border border-gray-300">
@@ -16,7 +25,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="order in orders" :key="order.id" class="hover:bg-gray-50 border-b">
+        <tr v-for="order in filteredOrders" :key="order.id" class="hover:bg-gray-50 border-b">
           <td class="px-4 py-2 border text-center">{{ order.id }}</td>
           <td class="px-4 py-2 border text-center">{{ order.buyer?.email || 'N/A' }}</td>
           <td class="px-4 py-2 border text-right">{{ formatCurrency(order.total_amount) }}</td>
@@ -46,18 +55,22 @@
 
 <script>
 import axios from 'axios';
-import GenericDetailsModal from './GenericDetailsModal.vue';
 import { useRoute } from 'vue-router';
+import FilterSearch from './component/SellerFilterSearch.vue';
+import GenericDetailsModal from './GenericDetailsModal.vue';
 
 export default {
   name: 'SellerOrders',
-  components: { GenericDetailsModal },
+  components: { FilterSearch, GenericDetailsModal },
   setup() {
     return { route: useRoute() };
   },
   data() {
     return {
       orders: [],
+      allOrders: [], // Store all orders for filtering
+      searchQuery: '',
+      currentFilter: 'all',
       showOrderDetailsModal: false,
       selectedOrder: null,
       statusText: {
@@ -156,7 +169,44 @@ export default {
         return { shipping_status: ['return'], order_status: ['canceled'] };
       }
       return {};
-    }
+    },
+    filters() {
+        const statusTypes = this.route.path.includes('/delivery')
+            ? [{ field: 'shipping_status', values: ['shipping', 'delivered'] }]
+            : this.route.path.includes('/returns')
+            ? [
+                { field: 'shipping_status', values: ['return'] },
+                { field: 'order_status', values: ['canceled'] },
+            ]
+            : [
+                { field: 'order_status', values: ['pending', 'paid', 'canceled'] },
+                { field: 'shipping_status', values: ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'] },
+            ];
+
+        const statusFilters = statusTypes.flatMap((type) =>
+            type.values.map((value) => ({
+            key: `${type.field}:${value}`,
+            label: this.statusText[type.field.replace('_status', '')][value],
+            count: this.filterCountByStatus(type.field, value),
+            }))
+        );
+
+        return [
+            { key: 'all', label: 'Tất cả', count: this.allOrders.length },
+            ...statusFilters,
+        ];
+    },
+    filteredOrders() {
+      const q = this.searchQuery.toLowerCase();
+      return this.allOrders.filter((order) => {
+        const matchQuery = (order.buyer?.email || '').toLowerCase().includes(q);
+        const matchFilter =
+          this.currentFilter === 'all' ||
+          (this.currentFilter.includes(':') &&
+            order[this.currentFilter.split(':')[0]] === this.currentFilter.split(':')[1]);
+        return matchQuery && matchFilter;
+      });
+    },
   },
   methods: {
     async fetchOrders() {
@@ -173,6 +223,7 @@ export default {
         });
 
         this.orders = response.data.data || [];
+        this.allOrders = [...this.orders]; // Store a copy for filtering
         console.log('Fetched seller orders:', JSON.stringify(this.orders, null, 2));
         this.orders.forEach(order => {
           console.log(`Order ${order.id} items:`, order.items.map(item => ({
@@ -187,6 +238,9 @@ export default {
         console.error('Error fetching orders:', error);
         alert('Không thể tải dữ liệu: ' + (error.response?.data?.message || 'Lỗi không xác định'));
       }
+    },
+    filterCountByStatus(field, value) {
+      return this.allOrders.filter((order) => order[field] === value).length;
     },
     formatCurrency(amount) {
       return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
@@ -204,10 +258,16 @@ export default {
       this.showOrderDetailsModal = false;
       this.selectedOrder = null;
     },
+    applySearch() {
+      console.log('Apply Seller Search:', this.searchQuery);
+      // Trigger filtering by updating filteredOrders (handled by computed property)
+    },
   },
   watch: {
     'route.path'() {
       this.fetchOrders();
+      this.currentFilter = 'all'; // Reset filter when route changes
+      this.searchQuery = ''; // Reset search query
     },
   },
   mounted() {
