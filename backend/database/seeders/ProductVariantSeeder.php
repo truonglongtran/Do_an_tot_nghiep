@@ -7,72 +7,77 @@ use App\Models\ProductVariant;
 use App\Models\Attribute;
 use App\Models\AttributeValue;
 use App\Models\ProductVariantAttribute;
+use Illuminate\Support\Facades\Log;
 
 class ProductVariantSeeder extends Seeder
 {
     public function run(): void
     {
-        $products = Product::all();
+        $products = Product::with('category')->get();
 
         foreach ($products as $product) {
-            // Lấy thuộc tính của danh mục qua category_attribute
+            if ($product->category && $product->category->name === 'Sách') {
+                Log::info("Skipped variant creation for book product", [
+                    'product_id' => $product->id,
+                    'category_id' => $product->category_id,
+                ]);
+                continue;
+            }
+
             $attributes = Attribute::whereIn('id', function ($query) use ($product) {
                 $query->select('attribute_id')
                     ->from('category_attribute')
                     ->where('category_id', $product->category_id);
             })->get();
 
-            // Nếu không có thuộc tính, tạo biến thể mặc định
             if ($attributes->isEmpty()) {
-                ProductVariant::create([
+                Log::warning("No attributes found for category, creating default variant", [
                     'product_id' => $product->id,
-                    'sku' => 'SKU-' . $product->id . '-1',
-                    'price' => rand(100000, 500000),
-                    'stock' => rand(10, 50),
-                    'status' => 'active',
-                    'image_url' => 'https://via.placeholder.com/150',
+                    'category_id' => $product->category_id,
                 ]);
+                $this->createDefaultVariant($product);
                 continue;
             }
 
-            // Lấy giá trị thuộc tính cho danh mục
             $attributeValues = [];
+
+            // Fetch values for all attributes
             foreach ($attributes as $attribute) {
                 $values = AttributeValue::where('attribute_id', $attribute->id)
                     ->where('category_id', $product->category_id)
-                    ->get();
-                if ($values->isNotEmpty()) {
-                    $attributeValues[$attribute->id] = $values->pluck('id')->toArray();
+                    ->pluck('id')
+                    ->toArray();
+                if (!empty($values)) {
+                    $attributeValues[$attribute->id] = $values;
                 }
             }
 
-            // Nếu không có giá trị thuộc tính nào, tạo biến thể mặc định
             if (empty($attributeValues)) {
-                ProductVariant::create([
+                Log::warning("No attribute values found for category, creating default variant", [
                     'product_id' => $product->id,
-                    'sku' => 'SKU-' . $product->id . '-1',
-                    'price' => rand(100000, 500000),
-                    'stock' => rand(10, 50),
-                    'status' => 'active',
-                    'image_url' => 'https://via.placeholder.com/150',
+                    'category_id' => $product->category_id,
                 ]);
+                $this->createDefaultVariant($product);
                 continue;
             }
 
-            // Tạo tổ hợp biến thể
             $combinations = $this->generateCombinations($attributeValues);
+            Log::info("Generated combinations for product", [
+                'product_id' => $product->id,
+                'combination_count' => count($combinations),
+            ]);
+
             if (empty($combinations)) {
-                // Nếu không tạo được tổ hợp, tạo biến thể mặc định
-                ProductVariant::create([
+                Log::warning("No combinations generated for product, creating default variant", [
                     'product_id' => $product->id,
-                    'sku' => 'SKU-' . $product->id . '-1',
-                    'price' => rand(100000, 500000),
-                    'stock' => rand(10, 50),
-                    'status' => 'active',
-                    'image_url' => 'https://via.placeholder.com/150',
+                    'category_id' => $product->category_id,
                 ]);
+                $this->createDefaultVariant($product);
                 continue;
             }
+
+            // Limit to 5 variants
+            $combinations = array_slice($combinations, 0, 5);
 
             foreach ($combinations as $index => $combination) {
                 $variant = ProductVariant::create([
@@ -85,16 +90,28 @@ class ProductVariantSeeder extends Seeder
                 ]);
 
                 foreach ($combination as $attributeId => $valueId) {
-                    // Kiểm tra attribute_id và attribute_value_id hợp lệ
-                    if ($attributeId > 0 && Attribute::where('id', $attributeId)->exists() && AttributeValue::where('id', $valueId)->exists()) {
+                    if (Attribute::where('id', $attributeId)->exists() &&
+                        AttributeValue::where('id', $valueId)
+                            ->where('attribute_id', $attributeId)
+                            ->where('category_id', $product->category_id)
+                            ->exists()) {
                         ProductVariantAttribute::create([
                             'product_variant_id' => $variant->id,
                             'attribute_id' => $attributeId,
                             'attribute_value_id' => $valueId,
                         ]);
-                    } else {
-                        \Log::warning('Invalid attribute or value skipped', [
+                        $attribute = Attribute::find($attributeId);
+                        $value = AttributeValue::find($valueId);
+                        Log::info("Assigned attribute to variant", [
                             'product_id' => $product->id,
+                            'variant_id' => $variant->id,
+                            'attribute_name' => $attribute->name,
+                            'value' => $value->value,
+                        ]);
+                    } else {
+                        Log::warning('Invalid attribute or value skipped', [
+                            'product_id' => $product->id,
+                            'variant_id' => $variant->id,
                             'attribute_id' => $attributeId,
                             'attribute_value_id' => $valueId,
                         ]);
@@ -102,6 +119,18 @@ class ProductVariantSeeder extends Seeder
                 }
             }
         }
+    }
+
+    private function createDefaultVariant($product)
+    {
+        ProductVariant::create([
+            'product_id' => $product->id,
+            'sku' => 'SKU-' . $product->id . '-1',
+            'price' => rand(100000, 500000),
+            'stock' => rand(10, 50),
+            'status' => 'active',
+            'image_url' => 'https://via.placeholder.com/150',
+        ]);
     }
 
     private function generateCombinations($attributeValues)
@@ -112,6 +141,12 @@ class ProductVariantSeeder extends Seeder
 
         $result = [[]];
         foreach ($attributeValues as $attributeId => $values) {
+            if (!is_numeric($attributeId) || $attributeId <= 0) {
+                Log::warning("Invalid attribute ID in generateCombinations", [
+                    'attribute_id' => $attributeId,
+                ]);
+                continue;
+            }
             $newResult = [];
             foreach ($result as $combination) {
                 foreach ($values as $value) {

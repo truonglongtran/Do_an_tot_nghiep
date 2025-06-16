@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/Order.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,7 +19,7 @@ class Order extends Model
         'order_status',
     ];
 
-    protected $appends = ['total_amount']; // Ensure total_amount is included in JSON
+    protected $appends = ['total_amount'];
 
     public function buyer()
     {
@@ -34,7 +33,7 @@ class Order extends Model
 
     public function items()
     {
-        return $this->hasMany(OrderItem::class)->with('productVariant');
+        return $this->hasMany(OrderItem::class); // Loại bỏ ->with('productVariant')
     }
 
     public function payments()
@@ -49,6 +48,11 @@ class Order extends Model
 
     public function getTotalAmountAttribute()
     {
+        // Đảm bảo items được tải
+        if (!$this->relationLoaded('items')) {
+            $this->load('items.productVariant');
+        }
+
         if ($this->items->isEmpty()) {
             Log::warning('No items found for order', ['order_id' => $this->id]);
             return 0;
@@ -61,11 +65,12 @@ class Order extends Model
                     'item_id' => $item->id,
                     'variant_id' => $item->product_variant_id,
                 ]);
-                return 0;
+                // Fallback to item price if available
+                $price = isset($item->price) && is_numeric($item->price) ? floatval($item->price) : 0;
+                return $price * $item->quantity;
             }
-            $price = is_numeric($item->productVariant->price)
-                ? floatval($item->productVariant->price)
-                : 0;
+
+            $price = is_numeric($item->productVariant->price) ? floatval($item->productVariant->price) : 0;
             Log::debug('OrderItem Total', [
                 'order_id' => $this->id,
                 'item_id' => $item->id,
@@ -81,4 +86,3 @@ class Order extends Model
         return $total;
     }
 }
-

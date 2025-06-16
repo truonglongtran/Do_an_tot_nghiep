@@ -62,8 +62,8 @@ Route::prefix('admin')->group(function () {
         Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 
         // Category management
-        Route::get('categories', [CategoryController::class, 'index']);
-        Route::get('categories/{categoryId}/attributes', [CategoryController::class, 'attributes']);        
+        Route::get('categories', [CategoryController::class, 'index']);       
+        Route::get('categories/{categoryId}/attributes', [CategoryController::class, 'attributes']);
         // Order management
         Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
         Route::get('/orders/{id}', [OrderController::class, 'show'])->name('orders.show');
@@ -132,6 +132,9 @@ Route::prefix('seller')->group(function () {
         Route::post('/shipping-partners/toggle', [SellerShippingPartnerController::class, 'toggle']);
         Route::get('/products', [SellerProductController::class, 'index']);
         Route::post('/products', [SellerProductController::class, 'store']);
+        Route::put('products/{id}', [SellerProductController::class, 'update']);
+        Route::delete('products/{id}', [SellerProductController::class, 'destroy']);
+        Route::put('variants/{variantId}/status', [SellerProductController::class, 'updateVariantStatus']);
         Route::get('categories', [SellerCategoryController::class, 'index']);
         Route::get('categories/{categoryId}/attributes', [SellerCategoryController::class, 'attributes']);
          Route::get('reviews', [SellerReviewController::class, 'showReviews']);

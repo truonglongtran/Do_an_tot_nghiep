@@ -13,8 +13,10 @@ return new class extends Migration
             $table->foreignId('category_id')->constrained('categories');
             $table->string('name');
             $table->text('description')->nullable();
-            $table->json('images')->nullable(); 
+            $table->json('images')->nullable();
             $table->enum('status', ['pending', 'approved', 'banned'])->default('pending');
+            $table->decimal('price', 10, 2)->nullable(); // Price for products without variants
+            $table->integer('stock')->nullable(); // Stock for products without variants
             $table->timestamps();
             $table->softDeletes();
         });
@@ -25,3 +27,4 @@ return new class extends Migration
         Schema::dropIfExists('products');
     }
 };
+?>

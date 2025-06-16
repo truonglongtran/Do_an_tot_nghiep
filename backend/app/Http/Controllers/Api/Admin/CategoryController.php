@@ -1,5 +1,5 @@
 <?php
-namespace App\Http\Controllers\Api\Admin;
+namespace App\Http\Controllers\Api\Seller;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
@@ -20,7 +20,7 @@ class CategoryController extends Controller
             $categories = $query->get();
             return response()->json(['data' => $categories]);
         } catch (\Exception $e) {
-            Log::error('Error in CategoryController::index: ' . $e->getMessage(), ['exception' => $e]);
+            Log::error('Error in SellerCategoryController::index: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json(['error' => 'Server error'], 500);
         }
     }
@@ -35,7 +35,7 @@ class CategoryController extends Controller
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['error' => 'Category not found'], 404);
         } catch (\Exception $e) {
-            Log::error('Error in CategoryController::attributes: ' . $e->getMessage(), ['exception' => $e]);
+            Log::error('Error in SellerCategoryController::attributes: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json(['error' => 'Server error'], 500);
         }
     }

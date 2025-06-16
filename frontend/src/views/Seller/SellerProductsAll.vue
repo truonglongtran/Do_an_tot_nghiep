@@ -1,97 +1,47 @@
 <template>
   <div class="p-8 space-y-6">
     <h1 class="text-2xl font-bold">Quản lý Sản phẩm</h1>
+    <!-- Tích hợp FilterSearch component -->
+    <FilterSearch
+      :filters="filters"
+      :search-placeholder="'Tìm kiếm sản phẩm...'"
+      v-model:currentFilter="currentFilter"
+      v-model:searchQuery="search"
+      @search="debouncedApplySearch"
+    />
+    <div class="flex justify-end mb-4">
+      <button @click="$router.push('/seller/products/add')" class="bg-blue-500 text-white p-2 rounded">Thêm sản phẩm</button>
+    </div>
     <div class="overflow-x-auto">
-      <p v-if="products.length === 0" class="text-center text-gray-500">
-        Không tìm thấy sản phẩm nào.
-      </p>
-      <table v-else class="table-auto border border-gray-300 eds-table">
+      <p v-if="filteredProducts.length === 0" class="text-center text-gray-500">Không tìm thấy sản phẩm nào.</p>
+      <table v-else class="min-w-full table-auto border border-gray-300 eds-table">
         <thead class="bg-gray-100">
           <tr>
-            <th class="px-4 py-2 border" style="width: 50px;">
+            <th class="px-4 py-2 border-b" style="width: 50px;">
               <div class="eds-table__cell">
                 <span class="eds-table__cell-label">Chọn</span>
               </div>
             </th>
-            <th class="px-4 py-2 border" style="width: 1050px;">
+            <th class="px-4 py-2 border-b" style="width: 1050px;">
               <div class="eds-table__cell">
                 <div class="product-variation-header flex">
-                  <div class="list-header-item" style="width: 450px; padding: 0.5rem;">
+                  <div class="list-header-item" style="width: 350px; padding: 0.5rem;">
                     <span class="list-header-item-label">Tên sản phẩm</span>
                   </div>
-                  <div
-                    class="list-header-item"
-                    style="width: 150px; padding: 0.5rem; text-align: center;"
-                  >
+                  <div class="list-header-item" style="width: 150px; padding: 0.5rem; text-align: center;">
                     <span class="list-header-item-label">Doanh số</span>
-                    <div class="list-header-item-action inline-block ml-1">
-                      <div class="eds-popover eds-popover--light">
-                        <div class="eds-popover__ref">
-                          <i class="eds-icon action-icon">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 16 16"
-                            >
-                              <path
-                                fill-rule="evenodd"
-                                d="M8,1 C11.8659932,1 15,4.13400675 15,8 C15,11.8659932 11.8659932,15 8,15 C4.13400675,15 1,11.8659932 1,8 C1,4.13400675 4.13400675,1 8,1 Z M8,2 C4.6862915,2 2,4.6862915 2,8 C2,11.3137085 4.6862915,14 8,14 C11.3137085,14 14,11.3137085 14,8 C14,4.6862915 11.3137085,2 8,2 Z M7.98750749,10.2375075 C8.40172105,10.2375075 8.73750749,10.5732939 8.73750749,10.9875075 C8.73750749,11.401721 8.40172105,11.7375075 7.98750749,11.7375075 C7.57329392,11.7375075 7.38461538,11.401721 7.38461538,10.9875075 C7.38461538,10.5732939 7.57329392,10.2375075 7.98750749,10.2375075 Z M8.11700238,4.60513307 C9.97011776,4.60513307 10.7745841,6.50497267 9.94298079,7.72186504 C9.76926425,7.97606597 9.56587088,8.14546785 9.27050506,8.31454843 L9.11486938,8.39945305 L8.95824852,8.47993747 C8.56296349,8.68261431 8.49390831,8.75808648 8.49390831,9.0209925 C8.49390831,9.29713488 8.27005069,9.5209925 7.99390831,9.5209925 C7.71776594,9.5209925 7.49390831,9.29713488 7.49390831,9.0209925 C7.49390831,8.34166619 7.7650409,7.99681515 8.35913594,7.6662627 L8.76655168,7.45066498 C8.9424056,7.3502536 9.04307851,7.26633638 9.11735517,7.1576467 C9.52116165,6.56675314 9.11397414,5.60513307 8.11700238,5.60513307 C7.41791504,5.60513307 6.82814953,6.01272878 6.75715965,6.55275918 L6.75,6.66244953 L6.74194433,6.75232516 C6.69960837,6.98557437 6.49545989,7.16244953 6.25,7.16244953 C5.97385763,7.16244953 5.75,6.9385919 5.75,6.66244953 C5.75,5.44256682 6.87194406,4.60513307 8.11700238,4.60513307 Z"
-                              ></path>
-                            </svg>
-                          </i>
-                        </div>
-                        <div
-                          class="eds-popper eds-popover__popper eds-popover__popper--light with-arrow"
-                          style="max-width: 320px; display: none;"
-                        >
-                          <div class="eds-popover__content">
-                            Thông tin doanh số của sản phẩm đã bao gồm cả doanh số của từng phân loại (kể cả những phân loại đã bị xóa)
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
-                  <div
-                    class="list-header-item"
-                    style="width: 150px; padding: 0.5rem; text-align: center;"
-                  >
+                  <div class="list-header-item" style="width: 150px; padding: 0.5rem; text-align: center;">
                     <span class="list-header-item-label">Giá</span>
                   </div>
-                  <div
-                    class="list-header-item"
-                    style="width: 150px; padding: 0.5rem; text-align: center;"
-                  >
+                  <div class="list-header-item" style="width: 150px; padding: 0.5rem; text-align: center;">
                     <span class="list-header-item-label">Kho hàng</span>
-                    <div class="list-header-item-action inline-block ml-1">
-                      <div class="eds-popover eds-popover--light">
-                        <div class="eds-popover__ref">
-                          <i class="eds-icon action-icon">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 16 16"
-                            >
-                              <path
-                                fill-rule="evenodd"
-                                d="M8,1 C11.8659932,1 15,4.13400675 15,8 C15,11.8659932 11.8659932,15 8,15 C4.13400675,15 1,11.8659932 1,8 C1,4.13400675 4.13400675,1 8,1 Z M8,2 C4.6862915,2 2,4.6862915 2,8 C2,11.3137085 4.6862915,14 8,14 C11.3137085,14 14,11.3137085 14,8 C14,4.6862915 11.3137085,2 8,2 Z M7.98750749,10.2375075 C8.40172105,10.2375075 8.73750749,10.5732939 8.73750749,10.9875075 C8.73750749,11.401721 8.40172105,11.7375075 7.98750749,11.7375075 C7.57329392,11.7375075 7.38461538,11.401721 7.38461538,10.9875075 C7.38461538,10.5732939 7.57329392,10.2375075 7.98750749,10.2375075 Z M8.11700238,4.60513307 C9.97011776,4.60513307 10.7745841,6.50497267 9.94298079,7.72186504 C9.76926425,7.97606597 9.56587088,8.14546785 9.27050506,8.31454843 L9.11486938,8.39945305 L8.95824852,8.47993747 C8.56296349,8.68261431 8.49390831,8.75808648 8.49390831,9.0209925 C8.49390831,9.29713488 8.27005069,9.5209925 7.99390831,9.5209925 C7.71776594,9.5209925 7.49390831,9.29713488 7.49390831,9.0209925 C7.49390831,8.34166619 7.7650409,7.99681515 8.35913594,7.6662627 L8.76655168,7.45066498 C8.9424056,7.3502536 9.04307851,7.26633638 9.11735517,7.1576467 C9.52116165,6.56675314 9.11397414,5.60513307 8.11700238,5.60513307 C7.41791504,5.60513307 6.82814953,6.01272878 6.75715965,6.55275918 L6.75,6.66244953 L6.74194433,6.75232516 C6.69960837,6.98557437 6.49545989,7.16244953 6.25,7.16244953 C5.97385763,7.16244953 5.75,6.9385919 5.75,6.66244953 C5.75,5.44256682 6.87194406,4.60513307 8.11700238,4.60513307 Z"
-                              ></path>
-                            </svg>
-                          </i>
-                        </div>
-                        <div
-                          class="eds-popper eds-popover__popper eds-popover__popper--light with-arrow"
-                          style="max-width: 320px; display: none;"
-                        >
-                          <div class="eds-popover__content">
-                            Tồn kho là tổng số lượng sản phẩm có sẵn để bán, bao gồm cả số lượng hàng được đăng ký khuyến mãi.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
-                  <div
-                    class="list-header-item"
-                    style="width: 150px; padding: 0.5rem; text-align: center;"
-                  >
+                  <div class="list-header-item" style="width: 150px; padding: 0.5rem; text-align: center;">
                     <span class="list-header-item-label">Trạng thái</span>
+                  </div>
+                  <div class="list-header-item" style="width: 100px; padding: 0.5rem; text-align: center;">
+                    <span class="list-header-item-label">Hành động</span>
                   </div>
                 </div>
               </div>
@@ -99,142 +49,80 @@
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="product in products"
-            :key="product.id"
-            class="hover:bg-gray-50 transition"
-          >
-            <td class="px-4 py-2 border text-center align-middle" style="width: 50px;">
-              <input
-                type="checkbox"
-                :name="'product_' + product.id"
-                :value="product.id"
-                class="eds-checkbox__input"
-              >
+          <tr v-for="product in filteredProducts" :key="product.id" class="hover:bg-gray-50 transition">
+            <td class="px-4 py-2 border-b text-center align-middle" style="width: 50px;">
+              <input type="checkbox" :name="'product_' + product.id" :value="product.id" class="eds-checkbox__input">
             </td>
-            <td class="px-4 py-2 border" style="width: 1050px;">
-              <table
-                class="w-full border-collapse"
-                style="table-layout: fixed; width: 1050px;"
-              >
+            <td class="px-4 py-2 border-b" style="width: 1050px;">
+              <table class="w-full border-collapse" style="table-layout: fixed; width: 1050px;">
                 <tr class="product-header">
-                  <td style="width: 450px; padding: 0.5rem;">
+                  <td style="width: 350px; padding: 0.5rem;">
                     <div class="flex items-center">
-                      <img
-                        :src="
-                          product.variants[0]?.image_url ||
-                          product.thumbnail ||
-                          'https://via.placeholder.com/50'
-                        "
-                        :alt="product.name"
-                        class="w-16 h-16 mr-4"
-                      >
+                      <img :src="product.thumbnail || 'https://placehold.co/50x50'" :alt="product.name || 'Product'" class="w-16 h-16 mr-4 object-cover">
                       <div>
-                        <a
-                          :href="'/portal/product/' + product.id"
-                          class="text-blue-600 hover:underline product-name-wrap"
-                          target="_blank"
-                        >
+                        <a :href="'/portal/product/' + product.id" class="text-blue-600 hover:underline product-name-wrap" target="_blank">
                           {{ product.name || 'N/A' }}
                         </a>
-                        <p class="text-sm text-gray-600">
-                          SKU: {{ product.sku || '-' }}
-                        </p>
                         <p class="text-sm text-gray-600">ID: {{ product.id }}</p>
                       </div>
                     </div>
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
-                    <p v-if="product.variants.length" class="text-sm text-gray-600">
-                      Tổng: {{ product.total_sales || 0 }}
-                    </p>
-                    <p v-else class="text-sm text-gray-600">
-                      {{ product.total_sales || 0 }}
-                    </p>
-                  </td>
-                  <td style="width: 150px; padding: 0.5rem; text-align: center;">
-                    <p v-if="product.variants.length" class="text-sm text-gray-600">
-                      {{
-                        product.variants.length > 1
-                          ? `₫${formatPrice(
-                              Math.min(...product.variants.map((v) => v.price))
-                            )} - ₫${formatPrice(
-                              Math.max(...product.variants.map((v) => v.price))
-                            )}`
-                          : `₫${formatPrice(product.variants[0]?.price)}`
-                      }}
-                    </p>
-                    <p v-else class="text-sm text-gray-600">
-                      ₫{{ formatPrice(product.price_min) }}
-                    </p>
-                  </td>
-                  <td style="width: 150px; padding: 0.5rem; text-align: center;">
-                    <p v-if="product.variants.length" class="text-sm text-gray-600">
-                      Tổng:
-                      {{ product.variants.reduce((sum, v) => sum + v.stock, 0) }}
-                    </p>
-                    <p v-else class="text-sm text-gray-600">
-                      {{ product.total_stock }}
-                    </p>
+                    <p class="text-sm text-gray-600">Tổng: {{ product.total_sales || 0 }}</p>
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
                     <p class="text-sm text-gray-600">
-                      {{ statusText[product.status] }}
+                      {{ product.variants.length > 1 ? `₫${formatCurrency(product.price_min)} - ₫${formatCurrency(product.price_max)}` : `₫${formatCurrency(product.price_min || 0)}` }}
                     </p>
                   </td>
+                  <td style="width: 150px; padding: 0.5rem; text-align: center;">
+                    <p class="text-sm text-gray-600">Tổng: {{ product.total_stock || 0 }}</p>
+                  </td>
+                  <td style="width: 150px; padding: 0.5rem; text-align: center;">
+                    <p class="text-sm text-gray-600">{{ statusText[product.status] || 'N/A' }}</p>
+                  </td>
+                  <td style="width: 100px; padding: 0.5rem; text-align: center;">
+                    <button @click="editProduct(product.id)" class="text-blue-500 hover:underline">Sửa</button>
+                    <button @click="deleteProduct(product.id)" class="text-red-500 hover:underline ml-2">Xóa</button>
+                  </td>
                 </tr>
-                <tr
-                  v-for="variant in product.variants"
-                  :key="variant.id"
-                  class="variant-row"
-                >
-                  <td
-                    style="width: 450px; padding: 0.5rem 0.5rem 0.5rem 2rem;"
-                  >
+                <tr v-for="variant in product.variants" :key="variant.id" class="variant-row">
+                  <td style="width: 350px; padding: 0.5rem 0.5rem 0.5rem 2rem;">
                     <div class="flex items-center variant-content">
-                      <img
-                        :src="
-                          variant.image_url || 'https://via.placeholder.com/50'
-                        "
-                        :alt="variant.color"
-                        class="w-12 h-12 mr-2"
-                      >
+                      <img :src="variant.image_url || 'https://placehold.co/50x50'" :alt="getPrimaryAttribute(variant) || 'Variant'" class="w-12 h-12 mr-2 object-cover">
                       <div>
-                        <p class="text-sm">{{ variant.color || 'N/A' }}</p>
-                        <p class="text-sm text-gray-600">
-                          Kích thước: {{ variant.size || 'N/A' }}
+                        <p class="text-sm" :class="{ 'text-red-500': isInvalidAttribute(variant) }">
+                          {{ getPrimaryAttribute(variant) || 'Không có thuộc tính' }}
                         </p>
-                        <p class="text-sm text-gray-600">
-                          SKU: {{ variant.sku || '-' }}
+                        <p v-for="attr in getOtherAttributes(variant)" :key="attr.name" class="text-sm text-gray-600" :class="{ 'text-red-500': isInvalidAttributeValue(attr) }">
+                          {{ attr.name }}: {{ attr.value }}
                         </p>
-                        <p class="text-sm text-gray-600">
-                          Giá: ₫{{ formatPrice(variant.price) }}
-                        </p>
-                        <p class="text-sm text-gray-600">
-                          Tồn kho: {{ variant.stock }}
-                        </p>
+                        <p class="text-sm text-gray-600">SKU: {{ variant.sku || '-' }}</p>
+                        <p class="text-sm text-gray-600">Giá: ₫{{ formatCurrency(variant.price || 0) }}</p>
+                        <p class="text-sm text-gray-600">Tồn kho: {{ variant.stock || 0 }}</p>
                       </div>
                     </div>
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
                     <p class="text-sm text-gray-600">
-                      {{ variant.color || 'N/A' }} ({{ variant.size || 'N/A' }}):
-                      {{ variant.sales || 0 }}
+                      {{ getPrimaryAttribute(variant) || 'N/A' }}: {{ variant.sales || 0 }}
                     </p>
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
-                    <p class="text-sm text-gray-600">
-                      ₫{{ formatPrice(variant.price) }}
-                    </p>
+                    <p class="text-sm text-gray-600">₫{{ formatCurrency(variant.price || 0) }}</p>
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
-                    <p class="text-sm text-gray-600">{{ variant.stock }}</p>
+                    <p class="text-sm text-gray-600">{{ variant.stock || 0 }}</p>
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
-                    <p class="text-sm text-gray-600">
-                      {{ variant.status === 'active' ? 'Kích hoạt' : 'Không kích hoạt' }}
-                    </p>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" v-model="variant.status" @change="toggleVariantStatus(variant)" :true-value="'active'" :false-value="'inactive'" class="sr-only peer">
+                      <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600">
+                        <div class="w-5 h-5 bg-white rounded-full shadow-md transform peer-checked:translate-x-5 transition-transform"></div>
+                      </div>
+                    </label>
                   </td>
+                  <td style="width: 100px; padding: 0; text-align: center;"></td>
                 </tr>
               </table>
             </td>
@@ -247,103 +135,253 @@
 
 <script>
 import axios from 'axios';
+import FilterSearch from './component/SellerFilterSearch.vue';
 
 export default {
-  name: 'SellerProducts',
+  name: 'SellerProductsAll',
+  components: {
+    FilterSearch
+  },
   data() {
     return {
-      products: [],
+      allProducts: [],
+      search: '',
+      currentFilter: 'all',
+      filters: [
+        { key: 'all', label: 'Tất cả', count: 0 },
+        { key: 'pending', label: 'Chờ duyệt', count: 0 },
+        { key: 'approved', label: 'Đã duyệt', count: 0 },
+        { key: 'banned', label: 'Bị cấm', count: 0 }
+      ],
       statusText: {
         pending: 'Chờ duyệt',
         approved: 'Đã duyệt',
-        banned: 'Bị cấm',
+        banned: 'Bị cấm'
       },
+      debouncedApplySearch: null,
+      validAttributeValues: {} // Sẽ được tải từ API
     };
   },
+  computed: {
+    filteredProducts() {
+      console.log('Computing filteredProducts with:', { search: this.search, currentFilter: this.currentFilter });
+      return this.allProducts.filter(product => {
+        const searchLower = this.search.trim().toLowerCase();
+        const matchSearch = searchLower === '' ||
+          product.name?.toLowerCase().includes(searchLower) ||
+          product.variants.some(variant => variant.sku?.toLowerCase().includes(searchLower));
+        const matchStatus = this.currentFilter === 'all' || product.status === this.currentFilter;
+        return matchSearch && matchStatus;
+      });
+    },
+    filterCounts() {
+      return {
+        all: this.allProducts.length,
+        pending: this.allProducts.filter(p => p.status === 'pending').length,
+        approved: this.allProducts.filter(p => p.status === 'approved').length,
+        banned: this.allProducts.filter(p => p.status === 'banned').length
+      };
+    }
+  },
+  created() {
+    const debounce = (func, wait) => {
+      let timeout;
+      return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    };
+    this.debouncedApplySearch = debounce(this.applySearch, 300);
+  },
   async mounted() {
+    await this.fetchValidAttributes();
     await this.fetchProducts();
+    this.updateFilterCounts();
+  },
+  watch: {
+    currentFilter(newValue) {
+      console.log('currentFilter changed to:', newValue);
+      this.applySearch();
+    }
   },
   methods: {
-    async fetchProducts() {
-      const token = localStorage.getItem('token');
+    async fetchValidAttributes() {
       try {
-        if (!token) throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
-        const response = await axios.get('/seller/products', {
-          headers: { Authorization: `Bearer ${token}` },
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:8000/api/seller/categories/attributes', {
+          headers: { Authorization: `Bearer ${token}` }
         });
-        this.products = response.data.data || [];
+        this.validAttributeValues = response.data.data.reduce((map, attr) => ({
+          ...map,
+          [attr.name.toLowerCase()]: attr.values.map(v => v.value.toLowerCase())
+        }), {});
+        console.log('Valid attribute values loaded:', this.validAttributeValues);
       } catch (error) {
-        console.error('Không thể tải danh sách sản phẩm:', error);
-        this.products = [];
+        console.error('Error fetching valid attributes:', error);
       }
     },
-    formatPrice(price) {
-      return new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 2 }).format(price || 0);
+    async fetchProducts() {
+      console.log('Fetching all products');
+      const token = localStorage.getItem('token');
+      try {
+        if (!token) {
+          throw new Error('No token found. Please login again.');
+        }
+        const response = await axios.get('http://localhost:8000/api/seller/products', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('API response:', response.data);
+        this.allProducts = response.data.data || [];
+        this.updateFilterCounts();
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        this.allProducts = [];
+        alert('Lỗi khi lấy danh sách sản phẩm: ' + (error.response?.data?.message || error.message));
+      }
     },
-  },
+    updateFilterCounts() {
+      this.filters = this.filters.map(filter => ({
+        ...filter,
+        count: this.filterCounts[filter.key] || 0
+      }));
+      console.log('Updated filter counts:', this.filters);
+    },
+    applySearch() {
+      console.log('Applying search with:', { search: this.search, currentFilter: this.currentFilter });
+      this.updateFilterCounts();
+    },
+    async toggleVariantStatus(variant) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.put(`http://localhost:8000/api/seller/variants/${variant.id}/status`, {
+          status: variant.status
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        alert('Cập nhật trạng thái biến thể thành công');
+        await this.fetchProducts();
+      } catch (error) {
+        console.error('Error updating variant status:', error);
+        alert('Lỗi khi cập nhật trạng thái biến thể: ' + (error.response?.data?.message || error.message));
+        variant.status = variant.status === 'active' ? 'inactive' : 'active';
+      }
+    },
+    editProduct(id) {
+      this.$router.push(`/seller/products/edit/${id}`);
+    },
+    async deleteProduct(id) {
+      if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
+        return;
+      }
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`http://localhost:8000/api/seller/products/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        alert('Xóa sản phẩm thành công');
+        await this.fetchProducts();
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Lỗi khi xóa sản phẩm: ' + (error.response?.data?.message || error.message));
+      }
+    },
+    formatCurrency(value) {
+      return new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 0 }).format(value || 0);
+    },
+    getPrimaryAttribute(variant) {
+      if (!variant.attributes || !Array.isArray(variant.attributes)) {
+        return null;
+      }
+      const priorities = ['màu sắc', 'kích cỡ', 'chất liệu'];
+      for (const priority of priorities) {
+        const attr = variant.attributes.find(a => a.name?.toLowerCase() === priority);
+        if (attr && attr.value) {
+          return attr.value;
+        }
+      }
+      return null;
+    },
+    getOtherAttributes(variant) {
+      if (!variant.attributes || !Array.isArray(variant.attributes)) {
+        return [];
+      }
+      const primaryValue = this.getPrimaryAttribute(variant);
+      return variant.attributes
+        .filter(attr => {
+          const isPrimary = primaryValue && attr.value === primaryValue && attr.name?.toLowerCase() === this.getPrimaryAttributeName(variant);
+          return !isPrimary && attr.value;
+        })
+        .map(attr => ({
+          name: attr.name,
+          value: attr.value
+        }));
+    },
+    getPrimaryAttributeName(variant) {
+      if (!variant.attributes || !Array.isArray(variant.attributes)) {
+        return null;
+      }
+      const priorities = ['màu sắc', 'kích cỡ', 'chất liệu'];
+      for (const priority of priorities) {
+        const attr = variant.attributes.find(a => a.name?.toLowerCase() === priority);
+        if (attr && attr.value) {
+          return attr.name?.toLowerCase();
+        }
+      }
+      return null;
+    },
+    isInvalidAttribute(variant) {
+      const primaryValue = this.getPrimaryAttribute(variant);
+      if (!primaryValue) return false;
+      const attributeName = this.getPrimaryAttributeName(variant);
+      const validValues = this.validAttributeValues[attributeName] || [];
+      return !validValues.includes(primaryValue.toLowerCase());
+    },
+    isInvalidAttributeValue(attr) {
+      const validValues = this.validAttributeValues[attr.name.toLowerCase()] || [];
+      return !validValues.includes(attr.value.toLowerCase());
+    }
+  }
 };
 </script>
 
 <style scoped>
-.transition {
-  transition: background-color 0.3s ease;
-}
-.product-name-wrap {
+.toggle-switch {
+  position: relative;
   display: inline-block;
-  max-width: 400px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 60px;
+  height: 34px;
 }
-.eds-table {
-  border-collapse: collapse;
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 1100px;
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
-.eds-table__cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.product-variation-header {
-  display: flex;
-  flex-wrap: nowrap;
-}
-.list-header-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-}
-.list-header-item-label {
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-.list-header-item-action {
-  display: inline-flex;
-  align-items: center;
-}
-.text-sm {
-  font-size: 0.875rem;
-}
-.product-header,
-.variant-row {
-  border-bottom: 1px solid #e5e7eb;
-}
-.product-header td,
-.variant-row td {
-  vertical-align: middle;
-  box-sizing: border-box;
-}
-.variant-content {
-  max-width: calc(400px - 48px - 1rem);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.eds-checkbox__input {
-  width: 1rem;
-  height: 1rem;
+.slider {
+  position: absolute;
   cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: #2196F3;
+}
+input:checked + .slider:before {
+  transform: translateX(26px);
 }
 </style>

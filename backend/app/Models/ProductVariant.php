@@ -1,12 +1,11 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
 class ProductVariant extends Model
 {
-    protected $fillable = ['product_id', 'sku', 'price', 'stock', 'status'];
+    protected $fillable = ['product_id', 'sku', 'price', 'stock', 'image_url', 'status'];
 
     public function product()
     {

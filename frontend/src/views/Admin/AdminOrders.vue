@@ -32,7 +32,7 @@
           :key="order.id"
           class="hover:bg-gray-50 transition"
         >
-          <td class="px-4 py-2 border text-center">{{ index + 1 }}</td>
+          <td class="px-4 py-2 border text-center">{{ (currentPage - 1) * perPage + index + 1 }}</td>
           <td class="px-4 py-2 border text-center">{{ order.buyer?.email || 'N/A' }}</td>
           <td class="px-4 py-2 border text-center">{{ order.seller?.email || 'N/A' }}</td>
           <td class="px-4 py-2 border text-center">{{ formatCurrency(order.total_amount) }}</td>
@@ -103,7 +103,23 @@
         </tr>
       </tbody>
     </table>
-
+    <div v-if="total > perPage" class="flex justify-center mt-4">
+      <button
+        :disabled="currentPage === 1"
+        @click="changePage(currentPage - 1)"
+        class="px-4 py-2 mx-1 border rounded"
+      >
+        Trước
+      </button>
+      <span class="px-4 py-2 mx-1">Trang {{ currentPage }} / {{ lastPage }}</span>
+      <button
+        :disabled="currentPage === lastPage"
+        @click="changePage(currentPage + 1)"
+        class="px-4 py-2 mx-1 border rounded"
+      >
+        Sau
+      </button>
+    </div>
     <!-- Modal xác nhận -->
     <ConfirmModal
       :show="showConfirmModal"
@@ -114,7 +130,6 @@
       @confirm="handleConfirm"
       @cancel="handleCancel"
     />
-
     <!-- Modal chi tiết đơn hàng -->
     <GenericDetailsModal
       :show="showOrderDetailsModal"
@@ -177,6 +192,10 @@ export default {
       showOrderDetailsModal: false,
       selectedOrder: null,
       isUpdating: false,
+      currentPage: 1,
+      perPage: 10,
+      lastPage: 1,
+      total: 0,
       orderFields: [
         { label: 'Người mua', key: 'buyer.email', type: 'text' },
         { label: 'Người bán', key: 'seller.email', type: 'text' },
@@ -222,8 +241,7 @@ export default {
                 <thead>
                   <tr>
                     <th class="px-4 py-2 border-b bg-gray-50 text-left">Sản phẩm</th>
-                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Màu</th>
-                    <th class="px-4 py-2 border-b bg-gray-50 text-left relative">Kích cỡ</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Thuộc tính</th>
                     <th class="px-4 py-2 border-b bg-gray-50 text-center">Số lượng</th>
                     <th class="px-4 py-2 border-b bg-gray-50 text-right">Giá</th>
                   </tr>
@@ -234,8 +252,13 @@ export default {
                       (item) => `
                         <tr>
                           <td class="px-4 py-2 border">${item.product?.name || 'N/A'}</td>
-                          <td class="px-4 py-2 border">${item.product_variant?.color || 'N/A'}</td>
-                          <td class="px-4 py-2 border">${item.product_variant?.size || 'N/A'}</td>
+                          <td class="px-4 py-2 border">${
+                            item.product_variant?.attributes?.length
+                              ? item.product_variant.attributes
+                                  .map((attr) => `${attr.attribute_name}: ${attr.attribute_value}`)
+                                  .join(', ')
+                              : 'Không có thuộc tính'
+                          }</td>
                           <td class="px-4 py-2 border text-center">${item.quantity || 0}</td>
                           <td class="px-4 py-2 border text-right">${this.formatCurrency(item.product_variant?.price || 0)}</td>
                         </tr>
@@ -309,13 +332,17 @@ export default {
         }
         const response = await axios.get('/admin/orders', {
           headers: { Authorization: `Bearer ${token}` },
+          params: {
+            page: this.currentPage,
+            per_page: this.perPage,
+          },
         });
         console.log('Phản hồi API:', response.data);
-        if (!Array.isArray(response.data)) {
+        if (!Array.isArray(response.data.data)) {
           console.error('Dữ liệu trả về không phải mảng:', response.data);
           throw new Error('Dữ liệu đơn hàng không đúng định dạng.');
         }
-        this.orders = response.data.map((order) => {
+        this.orders = response.data.data.map((order) => {
           const settledStatus = order.settled_status && ['unsettled', 'settled'].includes(order.settled_status) ? order.settled_status : 'unsettled';
           const shippingStatus = order.shipping_status && ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'].includes(order.shipping_status) ? order.shipping_status : 'pending';
           const orderStatus = order.order_status && ['pending', 'paid', 'canceled'].includes(order.order_status) ? order.order_status : 'pending';
@@ -324,6 +351,13 @@ export default {
             settled_status: settledStatus,
             shipping_status: shippingStatus,
             order_status: orderStatus,
+            items: order.items.map(item => ({
+              ...item,
+              product_variant: item.product_variant ? {
+                ...item.product_variant,
+                attributes: item.product_variant.attributes || [],
+              } : null,
+            })),
           };
           this.tempStatuses[order.id] = {
             settled_status: settledStatus,
@@ -333,6 +367,10 @@ export default {
           return result;
         });
         this.allOrders = [...this.orders];
+        this.currentPage = response.data.current_page;
+        this.lastPage = response.data.last_page;
+        this.perPage = response.data.per_page;
+        this.total = response.data.total;
       } catch (error) {
         console.error('Lỗi khi tải danh sách đơn hàng:', error.response?.data || error.message);
         alert('Không thể tải danh sách đơn hàng: ' + (error.message || 'Lỗi không xác định.'));
@@ -483,6 +521,12 @@ export default {
     },
     applySearch() {
       console.log('Apply Order Search:', this.searchQuery);
+      this.currentPage = 1;
+      this.fetchOrders();
+    },
+    changePage(page) {
+      this.currentPage = page;
+      this.fetchOrders();
     },
   },
 };

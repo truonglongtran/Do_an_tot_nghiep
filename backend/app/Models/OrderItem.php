@@ -1,16 +1,21 @@
 <?php
-
-// app/Models/OrderItem.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 
 class OrderItem extends Model
 {
     use HasFactory;
 
     protected $fillable = ['order_id', 'product_id', 'product_variant_id', 'quantity'];
+
+    public function __construct(array $attributes = [])
+    {
+        Log::info('OrderItem model loaded', ['class' => __CLASS__]);
+        parent::__construct($attributes);
+    }
 
     public function order()
     {
@@ -24,6 +29,6 @@ class OrderItem extends Model
 
     public function productVariant()
     {
-        return $this->belongsTo(ProductVariant::class, 'product_variant_id')->withTrashed();
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
 }

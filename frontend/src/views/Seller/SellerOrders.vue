@@ -68,7 +68,7 @@ export default {
   data() {
     return {
       orders: [],
-      allOrders: [], // Store all orders for filtering
+      allOrders: [],
       searchQuery: '',
       currentFilter: 'all',
       showOrderDetailsModal: false,
@@ -128,25 +128,35 @@ export default {
                 <thead>
                   <tr>
                     <th class="px-4 py-2 border-b bg-gray-50 text-left">Sản phẩm</th>
-                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Màu</th>
-                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Kích cỡ</th>
+                    <th class="px-4 py-2 border-b bg-gray-50 text-left">Thuộc tính</th>
                     <th class="px-4 py-2 border-b bg-gray-50 text-center">Số lượng</th>
                     <th class="px-4 py-2 border-b bg-gray-50 text-right">Giá</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${items
-                    .map(
-                      (item) => `
+                    .map((item) => {
+                      const attributes = item.product_variant?.variant_attributes?.length
+                        ? item.product_variant.variant_attributes
+                            .map((attr) => {
+                              console.log('Processing attribute for item:', item.id, 'attr:', JSON.stringify(attr));
+                              if (!attr.attribute || !attr.attribute_value) {
+                                return 'Thuộc tính không hợp lệ';
+                              }
+                              return `${attr.attribute.name}: ${attr.attribute_value.value}`;
+                            })
+                            .filter(Boolean)
+                            .join(', ') || 'Không có thuộc tính'
+                        : 'Không có thuộc tính';
+                      return `
                         <tr>
                           <td class="px-4 py-2 border">${item.product?.name || 'N/A'}</td>
-                          <td class="px-4 py-2 border">${item.product_variant?.color || 'N/A'}</td>
-                          <td class="px-4 py-2 border">${item.product_variant?.size || 'N/A'}</td>
+                          <td class="px-4 py-2 border">${attributes}</td>
                           <td class="px-4 py-2 border text-center">${item.quantity || 0}</td>
-                          <td class="px-4 py-2 border text-right">${this.formatCurrency(item.product_variant?.price || 0)}</td>
+                          <td class="px-4 py-2 border text-right">${this.formatCurrency(item.product_variant?.price || item.price || 0)}</td>
                         </tr>
-                      `
-                    )
+                      `;
+                    })
                     .join('')}
                 </tbody>
               </table>
@@ -164,46 +174,71 @@ export default {
     },
     filterParams() {
       if (this.route.path.includes('/delivery')) {
-        return { shipping_status: ['shipping', 'delivered'] };
+        return { shipping_status: 'shipping,delivered' };
       } else if (this.route.path.includes('/returns')) {
-        return { shipping_status: ['return'], order_status: ['canceled'] };
+        return { filter_type: 'returns' };
       }
       return {};
     },
     filters() {
-        const statusTypes = this.route.path.includes('/delivery')
-            ? [{ field: 'shipping_status', values: ['shipping', 'delivered'] }]
-            : this.route.path.includes('/returns')
-            ? [
-                { field: 'shipping_status', values: ['return'] },
-                { field: 'order_status', values: ['canceled'] },
-            ]
-            : [
-                { field: 'order_status', values: ['pending', 'paid', 'canceled'] },
-                { field: 'shipping_status', values: ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'] },
-            ];
+      const statusTypes = this.route.path.includes('/delivery')
+        ? [{ field: 'shipping_status', values: ['shipping', 'delivered'] }]
+        : this.route.path.includes('/returns')
+        ? [
+            { field: 'shipping_status', values: ['return'] },
+            { field: 'order_status', values: ['canceled'] },
+          ]
+        : [
+            { field: 'order_status', values: ['pending', 'paid', 'canceled'] },
+            { field: 'shipping_status', values: ['pending', 'processing', 'shipping', 'delivered', 'failed', 'return'] },
+          ];
 
-        const statusFilters = statusTypes.flatMap((type) =>
-            type.values.map((value) => ({
-            key: `${type.field}:${value}`,
-            label: this.statusText[type.field.replace('_status', '')][value],
-            count: this.filterCountByStatus(type.field, value),
-            }))
-        );
+      const statusFilters = statusTypes.flatMap((type) =>
+        type.values.map((value) => ({
+          key: `${type.field}:${value}`,
+          label: this.statusText[type.field.replace('_status', '')][value],
+          count: this.filterCountByStatus(type.field, value),
+        }))
+      );
 
-        return [
-            { key: 'all', label: 'Tất cả', count: this.allOrders.length },
-            ...statusFilters,
-        ];
+      // Tính số lượng cho mục "Tất cả" dựa trên điều kiện màn hình
+      let allOrdersCount = this.allOrders.length;
+      if (this.route.path.includes('/delivery')) {
+        allOrdersCount = this.allOrders.filter((order) =>
+          ['shipping', 'delivered'].includes(order.shipping_status)
+        ).length;
+      } else if (this.route.path.includes('/returns')) {
+        allOrdersCount = this.allOrders.filter(
+          (order) => order.shipping_status === 'return' || order.order_status === 'canceled'
+        ).length;
+      }
+
+      return [
+        { key: 'all', label: 'Tất cả', count: allOrdersCount },
+        ...statusFilters,
+      ];
     },
     filteredOrders() {
       const q = this.searchQuery.toLowerCase();
       return this.allOrders.filter((order) => {
         const matchQuery = (order.buyer?.email || '').toLowerCase().includes(q);
-        const matchFilter =
-          this.currentFilter === 'all' ||
-          (this.currentFilter.includes(':') &&
-            order[this.currentFilter.split(':')[0]] === this.currentFilter.split(':')[1]);
+
+        let matchFilter = false;
+        if (this.currentFilter === 'all') {
+          // Áp dụng điều kiện mặc định theo màn hình
+          if (this.route.path.includes('/delivery')) {
+            matchFilter = ['shipping', 'delivered'].includes(order.shipping_status);
+          } else if (this.route.path.includes('/returns')) {
+            matchFilter = order.shipping_status === 'return' || order.order_status === 'canceled';
+          } else {
+            matchFilter = true; // Màn Quản lý đơn hàng: hiển thị tất cả
+          }
+        } else if (this.currentFilter.includes(':')) {
+          // Áp dụng bộ lọc trạng thái cụ thể
+          const [field, value] = this.currentFilter.split(':');
+          matchFilter = order[field] === value;
+        }
+
         return matchQuery && matchFilter;
       });
     },
@@ -223,27 +258,18 @@ export default {
         });
 
         this.orders = response.data.data || [];
-        this.allOrders = [...this.orders]; // Store a copy for filtering
+        this.allOrders = [...this.orders];
         console.log('Fetched seller orders:', JSON.stringify(this.orders, null, 2));
-        this.orders.forEach(order => {
-          console.log(`Order ${order.id} items:`, order.items.map(item => ({
-            product_name: item.product?.name,
-            variant_color: item.product_variant?.color,
-            variant_size: item.product_variant?.size,
-            variant_price: item.product_variant?.price,
-            quantity: item.quantity,
-          })));
-        });
       } catch (error) {
         console.error('Error fetching orders:', error);
-        alert('Không thể tải dữ liệu: ' + (error.response?.data?.message || 'Lỗi không xác định'));
+        alert('Không thể tải dữ liệu: ' + (error.response?.data?.message || 'Lỗi hệ thống'));
       }
     },
     filterCountByStatus(field, value) {
       return this.allOrders.filter((order) => order[field] === value).length;
     },
     formatCurrency(amount) {
-      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
+      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount) || 0);
     },
     formatDate(date) {
       if (!date) return 'N/A';
@@ -252,7 +278,7 @@ export default {
     openDetailModal(order) {
       this.selectedOrder = { ...order };
       this.showOrderDetailsModal = true;
-      console.log('Opening modal for order:', order.id, 'items:', order.items);
+      console.log('Opening modal for order:', order.id, 'items:', JSON.stringify(order.items, null, 2));
     },
     closeDetailModal() {
       this.showOrderDetailsModal = false;
@@ -260,14 +286,16 @@ export default {
     },
     applySearch() {
       console.log('Apply Seller Search:', this.searchQuery);
-      // Trigger filtering by updating filteredOrders (handled by computed property)
     },
   },
   watch: {
-    'route.path'() {
-      this.fetchOrders();
-      this.currentFilter = 'all'; // Reset filter when route changes
-      this.searchQuery = ''; // Reset search query
+    'route.path': {
+      handler() {
+        this.fetchOrders();
+        this.currentFilter = 'all';
+        this.searchQuery = '';
+      },
+      immediate: true,
     },
   },
   mounted() {
