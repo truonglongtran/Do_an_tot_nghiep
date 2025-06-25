@@ -15,13 +15,18 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AdminSeeder::class,
             UserSeeder::class,
+            NotificationSeeder::class,
             ShippingPartnerSeeder::class,
             ShopSeeder::class,
+            ShopFollowerSeeder::class,
             CategorySeeder::class,
             AttributeSeeder::class,
             AttributeValueSeeder::class,
             ProductSeeder::class,
             ProductVariantSeeder::class,
+            CartSeeder::class,
+            FlashSaleSeeder::class,
+            SearchHistorySeeder::class,
             OrderSeeder::class,
             OrderItemSeeder::class,
             // PaymentSeeder::class,
@@ -38,6 +43,7 @@ class DatabaseSeeder extends Seeder
             ReportSeeder::class,
             BuyerAddressSeeder::class,
             ShopShippingPartnerSeeder::class,
+            MessageSeeder::class,
         ]);
        
     }

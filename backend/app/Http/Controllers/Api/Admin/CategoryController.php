@@ -1,5 +1,5 @@
 <?php
-namespace App\Http\Controllers\Api\Seller;
+namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
@@ -8,20 +8,39 @@ use Illuminate\Support\Facades\Log;
 
 class CategoryController extends Controller
 {
+    public function __construct()
+    {
+        // Áp dụng middleware auth:sanctum và kiểm tra vai trò admin
+        $this->middleware('auth:sanctum');
+        $this->middleware(function ($request, $next) {
+            $user = $request->user();
+            if (!$user || !in_array($user->role, ['superadmin', 'admin', 'moderator'])) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            return $next($request);
+        });
+    }
+
     public function index(Request $request)
     {
         try {
             $query = Category::select('id', 'name')->whereNull('deleted_at');
 
-            if ($request->has('search') && !empty($request->search)) {
-                $query->where('name', 'like', '%' . $request->search . '%');
+            if ($search = $request->input('search')) {
+                $query->where('name', 'like', "%{$search}%");
             }
 
             $categories = $query->get();
-            return response()->json(['data' => $categories]);
+            return response()->json([
+                'success' => true,
+                'data' => $categories
+            ], 200);
         } catch (\Exception $e) {
-            Log::error('Error in SellerCategoryController::index: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['error' => 'Server error'], 500);
+            Log::error('Error in AdminCategoryController::index: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Lỗi máy chủ: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -31,12 +50,21 @@ class CategoryController extends Controller
             $category = Category::with(['attributes.values' => function ($query) use ($categoryId) {
                 $query->where('category_id', $categoryId);
             }])->findOrFail($categoryId);
-            return response()->json(['data' => $category->attributes]);
+            return response()->json([
+                'success' => true,
+                'data' => $category->attributes
+            ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json(['error' => 'Category not found'], 404);
+            return response()->json([
+                'success' => false,
+                'error' => 'Danh mục không tồn tại'
+            ], 404);
         } catch (\Exception $e) {
-            Log::error('Error in SellerCategoryController::attributes: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['error' => 'Server error'], 500);
+            Log::error('Error in AdminCategoryController::attributes: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Lỗi máy chủ: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

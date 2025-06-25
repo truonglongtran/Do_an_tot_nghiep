@@ -8,8 +8,8 @@
         <FilterSearch
           :filters="filters"
           :searchPlaceholder="'Tìm theo tên đối tác...'"
-          v-model:currentFilter="statusFilter"
-          v-model:searchQuery="searchQuery"
+          v-model="statusFilter"
+          v-model:search="searchQuery"
           @search="applySearch"
         />
         <button
@@ -47,30 +47,24 @@
               <span v-else>N/A</span>
             </td>
             <td class="p-3 border-b">
-              <div class="flex items-center gap-3">
-                <label v-if="hasPermission('updateStatus')" class="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    class="sr-only peer"
-                    v-model="partner.tempStatus"
-                    @change="confirmToggleStatus(partner)"
-                  />
-                  <div
-                    class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-green-500 transition"
-                  ></div>
-                  <div
-                    class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full shadow-md peer-checked:translate-x-full transition-transform"
-                  ></div>
-                </label>
-                <span
-                  :class="{
-                    'text-green-600 font-medium': partner.status === 'active',
-                    'text-red-600 font-medium': partner.status === 'inactive'
-                  }"
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="sr-only peer"
+                  :checked="partner.isActive"
+                  @click.prevent="openToggleConfirmModal(partner, !partner.isActive)"
+                  :disabled="!hasPermission('update') || partner.isLoading"
+                />
+                <div
+                  class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-green-600 transition-colors duration-200"
+                  :class="{ 'opacity-50 cursor-not-allowed': !hasPermission('update') || partner.isLoading }"
                 >
-                  {{ formatStatus(partner.status) }}
-                </span>
-              </div>
+                  <div
+                    class="w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200"
+                    :class="{ 'translate-x-6': partner.isActive }"
+                  ></div>
+                </div>
+              </label>
             </td>
             <td class="p-3 border-b text-center space-x-2">
               <button
@@ -164,8 +158,7 @@ export default {
       confirmAction: null,
       confirmTitle: 'Xác nhận',
       confirmMessage: '',
-      newStatus: null,
-      originalStatus: null,
+      newIsActive: null,
       partnerFields: [
         { label: 'Tên', key: 'name', type: 'text' },
         { label: 'API URL', key: 'api_url', type: 'link' },
@@ -179,7 +172,7 @@ export default {
           label: 'Cửa hàng liên kết',
           key: 'shops',
           type: 'list',
-          listItemKey: 'name', // Giả định shops là mảng các object có field name
+          listItemKey: 'name',
         },
         { label: 'Ngày tạo', key: 'created_at', type: 'date' },
       ],
@@ -248,25 +241,27 @@ export default {
     },
   },
   async mounted() {
-    console.log('Mounted AdminShippingPartners, Role:', localStorage.getItem('role'));
+    console.log('Mounted AdminShippingPartners');
+    console.log('Role:', localStorage.getItem('role'));
     console.log('Has view permission:', this.hasPermission('view'));
+    console.log('Has update permission:', this.hasPermission('update'));
     await this.fetchPartners();
   },
   methods: {
     hasPermission(action) {
-      const role = localStorage.getItem('role');
+      const role = localStorage.getItem('role') || 'viewer';
       const matchedRoute = this.router.getRoutes().find((r) => r.path === '/admin/shipping-partners');
       if (!matchedRoute || !matchedRoute.meta || !matchedRoute.meta.permissions) {
         console.warn('Không tìm thấy meta.permissions cho /admin/shipping-partners');
         return false;
       }
-      const hasPermission = matchedRoute.meta.permissions[role]?.includes(action) || false;
-      console.log(`Quyền ${action} cho role ${role}:`, hasPermission);
+      const permissions = matchedRoute.meta.permissions[role] || [];
+      const hasPermission = permissions.includes(action);
+      console.log(`Checking permission for action "${action}" and role "${role}":`, hasPermission, 'Permissions:', permissions);
       return hasPermission;
     },
     async fetchPartners() {
       const token = localStorage.getItem('token');
-      console.log('Token:', token);
       try {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
@@ -278,61 +273,77 @@ export default {
           headers: { Authorization: `Bearer ${token}` },
           params,
         });
-        console.log('Phản hồi API:', response.data);
-        if (!Array.isArray(response.data.partners)) {
-          console.error('Dữ liệu partners không phải mảng:', response.data.partners);
-          throw new Error('Dữ liệu đối tác không đúng định dạng.');
-        }
         this.partners = response.data.partners.map(partner => ({
           ...partner,
-          tempStatus: partner.status === 'active'
+          isActive: partner.status === 'active',
+          isLoading: false,
         }));
         this.statuses = response.data.statuses || ['active', 'inactive'];
         this.errorMessage = '';
+        this.resetLoadingStates();
       } catch (error) {
-        console.error('Lỗi khi tải đối tác:', error.response || error);
+        console.error('Lỗi khi tải đối tác:', error);
         this.errorMessage = error.response?.status === 401
           ? 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.'
           : 'Không thể tải danh sách đối tác: ' + (error.message || 'Lỗi không xác định.');
+        this.resetLoadingStates();
         if (error.response?.status === 401 || error.response?.status === 403) {
-          console.warn('Lỗi xác thực hoặc quyền, chuyển hướng về login');
           this.$router.push('/admin/login');
         }
       }
     },
-    async updateStatus(partner) {
+    resetLoadingStates() {
+      console.log('Resetting loading states for all partners');
+      this.partners = this.partners.map(partner => ({
+        ...partner,
+        isLoading: false,
+      }));
+    },
+    async toggleStatus(partner) {
+      console.log('Toggling status for partner:', partner.id, 'isLoading:', partner.isLoading, 'New isActive:', this.newIsActive);
       const token = localStorage.getItem('token');
-      if (!this.hasPermission('updateStatus')) {
-        alert('Bạn không có quyền cập nhật trạng thái.');
-        partner.tempStatus = partner.status === 'active';
+      if (!token) {
+        this.$toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+        this.$router.push('/admin/login');
         return;
       }
+      if (!this.hasPermission('update')) {
+        this.$toast.error('Bạn không có quyền cập nhật trạng thái.');
+        return;
+      }
+      if (this.newIsActive === null) {
+        console.error('newIsActive is null');
+        this.$toast.error('Lỗi: Trạng thái không hợp lệ.');
+        return;
+      }
+      const newStatus = this.newIsActive ? 'active' : 'inactive';
+      const originalIsActive = partner.isActive;
+      partner.isLoading = true;
       try {
-        const newStatusValue = partner.tempStatus ? 'active' : 'inactive';
         await axios.put(
           `/admin/shipping-partners/${partner.id}`,
-          { status: newStatusValue },
+          { status: newStatus },
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        partner.status = newStatusValue;
-        alert('Cập nhật trạng thái thành công');
+        partner.status = newStatus;
+        partner.isActive = this.newIsActive;
+        this.$toast.success('Cập nhật trạng thái thành công');
       } catch (error) {
         console.error('Lỗi cập nhật trạng thái:', error);
-        alert('Cập nhật trạng thái thất bại: ' + (error.response?.data?.message || error.message));
-        partner.tempStatus = partner.status === 'active';
+        this.$toast.error('Cập nhật trạng thái thất bại: ' + (error.response?.data?.message || error.message));
+        partner.isActive = originalIsActive;
+      } finally {
+        partner.isLoading = false;
+        this.newIsActive = null;
+        console.log('Set isLoading to false for partner:', partner.id);
       }
     },
     async handlePartnerFormSubmit(form) {
       if (!this.hasPermission(this.editingPartner ? 'update' : 'create')) {
-        alert(`Bạn không có quyền ${this.editingPartner ? 'cập nhật' : 'tạo'} đối tác.`);
+        this.$toast.error(`Bạn không có quyền ${this.editingPartner ? 'cập nhật' : 'tạo'} đối tác.`);
         return;
       }
       const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Vui lòng đăng nhập lại.');
-        this.$router.push('/staff/login');
-        return;
-      }
       try {
         let response;
         if (this.editingPartner) {
@@ -344,41 +355,43 @@ export default {
           const index = this.partners.findIndex(p => p.id === this.editingPartner.id);
           this.partners.splice(index, 1, {
             ...response.data.partner,
-            tempStatus: response.data.data?.partner?.status === 'active' || response.data.status === 'active'
+            isActive: response.data.partner.status === 'active',
+            isLoading: false,
           });
-          alert('Cập nhật đối tác thành công');
+          this.$toast.success('Cập nhật đối tác thành công');
         } else {
           response = await axios.post(
             '/admin/shipping-partners',
             form,
-            { headers: { Authorization: `Bearer ${token}` }
-          });
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
           this.partners.push({
             ...response.data.partner,
-            tempStatus: response.data.data?.status || response.data.status === 'active'
+            isActive: response.data.partner.status === 'active',
+            isLoading: false,
           });
-          alert('Thêm đối tác thành công');
+          this.$toast.success('Thêm đối tác thành công');
         }
         this.closePartnerModal();
         this.errorMessage = null;
       } catch (error) {
-        console.error('Lỗi xử lý form:', error.response?.data || error);
+        console.error('Lỗi xử lý form:', error);
         if (error.response?.status === 422) {
-          const errors = error.response.data.details || error.response.data.errors || error.response?.data;
+          const errors = error.response.data.errors || {};
           let errorMessage = 'Lỗi xác thực:\n';
           for (const [field, messages] of Object.entries(errors)) {
             errorMessage += `- ${field}: ${messages.join(', ')}\n`;
           }
-          alert(errorMessage);
+          this.$toast.error(errorMessage);
         } else {
-          alert('Lỗi: ' + (error.response?.data?.message || error.message));
+          this.$toast.error('Lỗi: ' + (error.response?.data?.message || error.message));
         }
       }
     },
     async deletePartner() {
       const token = localStorage.getItem('token');
       if (!this.hasPermission('delete')) {
-        alert('Bạn không có quyền xóa đối tác.');
+        this.$toast.error('Bạn không có quyền xóa đối tác.');
         return;
       }
       try {
@@ -387,11 +400,11 @@ export default {
         });
         this.partners = this.partners.filter(p => p.id !== this.selectedPartner.id);
         this.errorMessage = '';
-        alert('Xóa đối tác thành công');
+        this.$toast.success('Xóa đối tác thành công');
       } catch (error) {
         console.error('Lỗi xóa đối tác:', error);
         this.errorMessage = error.response?.data?.message || 'Không thể xóa đối tác.';
-        alert('Xóa đối tác thất bại: ' + (error.response?.data?.message || error.message));
+        this.$toast.error('Xóa đối tác thất bại: ' + (error.response?.data?.message || error.message));
       }
     },
     formatStatus(status) {
@@ -414,10 +427,6 @@ export default {
     applySearch() {
       this.fetchPartners();
     },
-    confirmToggleStatus(partner) {
-      const newStatus = partner.tempStatus ? 'active' : 'inactive';
-      this.openConfirmModal('status', partner, newStatus);
-    },
     openDetailModal(partner) {
       this.selectedPartner = { ...partner };
       this.showDetailModal = true;
@@ -428,7 +437,7 @@ export default {
     },
     openAddModal() {
       if (!this.hasPermission('create')) {
-        alert('Bạn không có quyền tạo đối tác.');
+        this.$toast.error('Bạn không có quyền tạo đối tác.');
         return;
       }
       this.editingPartner = null;
@@ -439,7 +448,7 @@ export default {
     },
     openEditModal(partner) {
       if (!this.hasPermission('update')) {
-        alert('Bạn không có quyền sửa đối tác.');
+        this.$toast.error('Bạn không có quyền sửa đối tác.');
         return;
       }
       this.editingPartner = {
@@ -457,13 +466,9 @@ export default {
       this.showPartnerModal = false;
       this.editingPartner = null;
     },
-    openConfirmModal(action, partner, newStatus = null) {
+    openConfirmModal(action, partner) {
       if (action === 'delete' && !this.hasPermission('delete')) {
-        alert('Bạn không có quyền xóa đối tác.');
-        return;
-      }
-      if (action === 'status' && !this.hasPermission('updateStatus')) {
-        alert('Bạn không có quyền cập nhật trạng thái.');
+        this.$toast.error('Bạn không có quyền xóa đối tác.');
         return;
       }
       this.confirmAction = action;
@@ -471,38 +476,106 @@ export default {
       if (action === 'delete') {
         this.confirmTitle = 'Xác nhận xóa';
         this.confirmMessage = `Bạn có chắc chắn muốn xóa đối tác "${partner.name || 'N/A'}" không?`;
-      } else if (action === 'status') {
-        this.originalStatus = partner.status;
-        this.newStatus = newStatus;
-        this.confirmTitle = 'Xác nhận đổi trạng thái';
-        this.confirmMessage = `Bạn có chắc chắn muốn đổi trạng thái đối tác "${partner.name || 'N/A'}" thành "${this.formatStatus(newStatus)}" không?`;
       }
       this.showConfirmModal = true;
+      console.log('Confirm modal opened for delete:', { confirmAction: this.confirmAction, selectedPartner: this.selectedPartner });
     },
-    async handleConfirm() {
-      if (this.confirmAction === 'delete') {
+    openToggleConfirmModal(partner, newIsActive) {
+    console.log('Opening toggle confirm modal for partner:', partner.id, 'Permission:', this.hasPermission('update'), 'New state:', newIsActive);
+    if (!this.hasPermission('update')) {
+      this.$toast.error('Bạn không có quyền cập nhật trạng thái.');
+      return;
+    }
+    this.confirmAction = 'toggleStatus';
+    this.selectedPartner = { ...partner };
+    this.newIsActive = newIsActive;
+    this.confirmTitle = 'Xác nhận thay đổi trạng thái';
+    this.confirmMessage = `Bạn có chắc chắn muốn thay đổi trạng thái của "${partner.name || 'N/A'}" thành ${newIsActive ? 'Hoạt động' : 'Ngừng hoạt động'}?`;
+    this.showConfirmModal = true;
+  },
+
+  async handleConfirm() {
+    console.log('Handling confirm action:', this.confirmAction, 'Selected partner:', this.selectedPartner, 'New isActive:', this.newIsActive);
+    try {
+      if (!this.selectedPartner || !this.confirmAction) {
+        console.error('Missing selectedPartner or confirmAction');
+        this.$toast.error('Lỗi: Thiếu thông tin xác nhận.');
+        return;
+      }
+      if (this.confirmAction === 'toggleStatus') {
+        const partner = this.partners.find(p => p.id === this.selectedPartner.id);
+        if (!partner) {
+          console.error('Partner not found in partners array:', this.selectedPartner.id);
+          this.$toast.error('Lỗi: Không tìm thấy đối tác.');
+          return;
+        }
+        await this.toggleStatus(partner);
+      } else if (this.confirmAction === 'delete') {
         await this.deletePartner();
-      } else if (this.confirmAction === 'status') {
-        this.selectedPartner.tempStatus = this.newStatus === 'active';
-        await this.updateStatus(this.selectedPartner);
+      } else {
+        console.error('Invalid confirm action:', this.confirmAction);
+        this.$toast.error('Lỗi: Hành động không hợp lệ.');
       }
+    } catch (error) {
+      console.error('Error in handleConfirm:', error);
+      this.$toast.error('Lỗi xác nhận: ' + (error.message || 'Lỗi không xác định.'));
+    } finally {
       this.resetModal();
-    },
-    handleCancel() {
-      if (this.confirmAction === 'status' && this.selectedPartner) {
-        this.selectedPartner.tempStatus = this.selectedPartner.status === 'active';
-      }
-      this.resetModal();
-    },
-    resetModal() {
-      this.showConfirmModal = false;
-      this.confirmAction = null;
-      this.selectedPartner = null;
-      this.confirmTitle = 'Xác nhận';
-      this.confirmMessage = '';
-      this.newStatus = null;
-      this.originalStatus = null;
-    },
+    }
+  },
+
+  handleCancel() {
+    console.log('Handling cancel action:', this.confirmAction);
+    // Không cần khôi phục trạng thái partner.isActive vì nó chưa được thay đổi
+    this.resetModal();
+  },
+
+  async toggleStatus(partner) {
+    console.log('Toggling status for partner:', partner.id, 'isLoading:', partner.isLoading, 'New isActive:', this.newIsActive);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      this.$toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+      this.$router.push('/admin/login');
+      return;
+    }
+    if (!this.hasPermission('update')) {
+      this.$toast.error('Bạn không có quyền cập nhật trạng thái.');
+      return;
+    }
+    if (this.newIsActive === null) {
+      console.error('newIsActive is null');
+      this.$toast.error('Lỗi: Trạng thái không hợp lệ.');
+      return;
+    }
+    const newStatus = this.newIsActive ? 'active' : 'inactive';
+    partner.isLoading = true;
+    try {
+      await axios.put(
+        `/admin/shipping-partners/${partner.id}`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      partner.status = newStatus;
+      partner.isActive = this.newIsActive; // Chỉ cập nhật sau khi API thành công
+      this.$toast.success('Cập nhật trạng thái thành công');
+    } catch (error) {
+      console.error('Lỗi cập nhật trạng thái:', error);
+      this.$toast.error('Cập nhật trạng thái thất bại: ' + (error.response?.data?.message || error.message));
+    } finally {
+      partner.isLoading = false;
+      this.newIsActive = null;
+    }
+  },
+
+  resetModal() {
+    console.log('Resetting modal state');
+    this.showConfirmModal = false;
+    this.confirmAction = null;
+    this.selectedPartner = null;
+    this.newIsActive = null;
+    this.confirmTitle = 'Xác nhận';
+    this.confirmMessage = '';
+  },
   },
 };
 </script>

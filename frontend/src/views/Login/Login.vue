@@ -87,10 +87,15 @@ export default {
         console.log('Phản hồi đầy đủ:', response);
         console.log('Dữ liệu phản hồi:', response.data);
         if (response.status === 200 && response.data.token) {
-          localStorage.setItem('email', response.data.user.email);
           localStorage.setItem('token', response.data.token);
+          localStorage.setItem('email', response.data.user.email);
+          localStorage.setItem('username', response.data.user.username || 'Người dùng');
+          localStorage.setItem('avatar_url', response.data.user.avatar_url || 'https://via.placeholder.com/50');
           localStorage.setItem('role', response.data.role);
           localStorage.setItem('loginType', this.route.path.split('/')[1]);
+          console.log('localStorage username:', localStorage.getItem('username')); // Debug
+          // Trigger storage event
+          window.dispatchEvent(new Event('storage'));
           const loginType = this.route.path.split('/')[1];
           if (loginType === 'admin') {
             this.router.push('/admin/dashboard');

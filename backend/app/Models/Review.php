@@ -16,10 +16,11 @@ class Review extends Model
         return $this->belongsTo(Order::class);
     }
 
-    public function buyer()
+    public function user()
     {
         return $this->belongsTo(User::class, 'buyer_id');
     }
+
 
     public function product()
     {

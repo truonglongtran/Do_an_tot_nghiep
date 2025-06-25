@@ -2,7 +2,7 @@
   <div class="p-6 space-y-6">
     <h1 class="text-2xl font-bold">{{ isEditMode ? 'Sửa sản phẩm' : 'Thêm sản phẩm' }}</h1>
     
-    <form @submit.prevent="submitProduct">
+    <form @submit.prevent="showConfirmModal('submit')">
       <!-- Thông tin cơ bản -->
       <div class="border p-4 rounded">
         <h2 class="text-lg font-semibold mb-4">Thông tin cơ bản</h2>
@@ -48,7 +48,15 @@
               <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
             </select>
           </div>
+          <!-- Debug: Hiển thị nếu không có category_id -->
+          <div v-if="!form.category_id">
+            <p class="text-red-500">Không có category_id: {{ form.category_id }}</p>
+          </div>
           <div v-if="form.category_id">
+            <!-- Debug: Hiển thị nếu không có attributes -->
+            <div v-if="!attributes.length">
+              <p class="text-red-500">Không có attributes: {{ attributes }}</p>
+            </div>
             <div v-if="attributes.length > 0">
               <label class="block">Thuộc tính</label>
               <div class="space-y-2">
@@ -56,6 +64,10 @@
                   <input type="checkbox" v-model="selectedAttributes[attribute.id]" :value="attribute.id" @change="updateSelectedAttributes" />
                   <span class="ml-2">{{ attribute.name }}</span>
                 </label>
+              </div>
+              <!-- Debug: Hiển thị nếu không có selectedAttributes -->
+              <div v-if="!Object.keys(selectedAttributes).some(key => selectedAttributes[key])">
+                <p class="text-red-500">Không có selectedAttributes: {{ selectedAttributes }}</p>
               </div>
               <div v-if="Object.keys(selectedAttributes).some(key => selectedAttributes[key])" class="space-y-4 mt-4">
                 <div class="overflow-x-auto">
@@ -97,11 +109,15 @@
                           <input v-model="variant.stock" type="number" class="w-full p-1 border rounded text-sm" required min="0" />
                         </td>
                         <td class="px-2 py-1 border text-center">
-                          <button type="button" @click="confirmRemoveVariant(index)" class="bg-red-500 text-white px-2 py-1 rounded text-sm">Xóa</button>
+                          <button type="button" @click="showConfirmModal('removeVariant', index)" class="bg-red-500 text-white px-2 py-1 rounded text-sm">Xóa</button>
                         </td>
                       </tr>
                     </tbody>
                   </table>
+                  <!-- Debug: Hiển thị nếu không có variants -->
+                  <div v-if="!form.variants.length">
+                    <p class="text-red-500">Không có variants: {{ form.variants }}</p>
+                  </div>
                   <div class="mt-4">
                     <button type="button" @click="addManualVariant" class="bg-green-500 text-white p-2 rounded">+ Thêm biến thể</button>
                   </div>
@@ -124,19 +140,45 @@
 
       <!-- Nút hành động -->
       <div class="flex space-x-4 mt-6">
-        <button type="submit" class="bg-blue-500 text-white p-2 rounded" :disabled="isLoading || !form.image_urls.length || (attributes.length > 0 && !form.variants.length)">
+        <button
+          type="submit"
+          class="bg-blue-500 text-white p-2 rounded"
+          :disabled="isLoading || !form.image_urls.length || (attributes.length > 0 && !form.variants.length)"
+        >
           {{ isLoading ? 'Đang xử lý...' : (isEditMode ? 'Cập nhật' : 'Đăng bán') }}
+        </button>
+        <button
+          type="button"
+          @click="showConfirmModal('cancel')"
+          class="bg-gray-300 text-gray-800 p-2 rounded hover:bg-gray-400"
+        >
+          Hủy
         </button>
       </div>
     </form>
+
+    <!-- Confirm Modal -->
+    <ConfirmModal
+      :show="modal.show"
+      :title="modal.title"
+      :message="modal.message"
+      :confirmText="modal.confirmText"
+      :cancelText="modal.cancelText"
+      @confirm="handleModalConfirm"
+      @cancel="handleModalCancel"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import ConfirmModal from './component/SellerConfirmModal.vue'; // Giả định đường dẫn đến ConfirmModal
 
 export default {
   name: 'SellerProductsAddEdit',
+  components: {
+    ConfirmModal,
+  },
   data() {
     return {
       isEditMode: false,
@@ -158,6 +200,15 @@ export default {
       selectedAttributes: {},
       isLoading: false,
       placeholderImage: 'https://via.placeholder.com/150',
+      modal: {
+        show: false,
+        title: '',
+        message: '',
+        confirmText: 'Xác nhận',
+        cancelText: 'Hủy',
+        action: null,
+        data: null, // Lưu dữ liệu bổ sung (e.g., index của variant cần xóa)
+      },
     };
   },
   computed: {
@@ -166,12 +217,12 @@ export default {
     },
   },
   async mounted() {
+    console.log('Mounted, isEditMode:', this.isEditMode, 'Product ID:', this.$route.params.id);
     await this.fetchCategories();
     if (this.$route.params.id) {
       this.isEditMode = true;
       await this.fetchProduct(this.$route.params.id);
-    }
-    if (!this.isEditMode && !this.form.image_urls.length) {
+    } else if (!this.form.image_urls.length) {
       this.form.image_urls.push(this.placeholderImage);
     }
   },
@@ -179,19 +230,27 @@ export default {
     async fetchCategories() {
       try {
         const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No token found in localStorage');
+        }
         const response = await axios.get('http://localhost:8000/api/seller/categories', {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Categories:', response.data.data);
         this.categories = response.data.data || [];
       } catch (error) {
-        alert('Lỗi khi tải danh mục: ' + (error.response?.data?.message || 'Lỗi'));
+        console.error('Error fetching categories:', error.response?.data || error.message);
+        alert('Lỗi khi tải danh mục: ' + (error.response?.data?.message || 'Lỗi hệ thống'));
       }
     },
     async fetchAttributes() {
       if (!this.form.category_id) {
+        console.log('No category_id, resetting attributes and variants');
         this.attributes = [];
         this.selectedAttributes = {};
-        this.form.variants = [];
+        if (!this.isEditMode) {
+          this.form.variants = [];
+        }
         return;
       }
       try {
@@ -199,58 +258,92 @@ export default {
         const response = await axios.get(`http://localhost:8000/api/seller/categories/${this.form.category_id}/attributes`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Attributes:', response.data.data);
         this.attributes = response.data.data || [];
-        this.selectedAttributes = {};
         if (!this.isEditMode) {
+          this.selectedAttributes = {};
           this.form.variants = [];
         }
       } catch (error) {
-        alert('Lỗi khi tải thuộc tính: ' + (error.response?.data?.message || 'Lỗi'));
+        console.error('Error fetching attributes:', error.response?.data);
+        alert('Lỗi khi tải thuộc tính: ' + (error.response?.data?.message || 'Lỗi hệ thống'));
       }
     },
     async fetchProduct(id) {
       try {
+        console.log('Fetching product with ID:', id);
+        this.form = {
+          id: null,
+          category_id: '',
+          name: '',
+          description: '',
+          image_urls: [],
+          variants: [],
+          status: 'pending',
+          sku: '',
+          price: 0,
+          stock: 0,
+          image: '',
+        };
         const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No token found in localStorage');
+        }
         const response = await axios.get(`http://localhost:8000/api/seller/products/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const product = response.data.data;
+        console.log('Product data:', response.data.data);
+        const product = response.data.data || {};
+
         this.form = {
-          id: product.id,
+          id: product.id || null,
           category_id: product.category?.id || '',
-          name: product.name,
+          name: product.name || '',
           description: product.description || '',
-          image_urls: product.images || [this.placeholderImage],
-          variants: product.variants.length && product.category.attributes.length ? product.variants.map(variant => ({
-            id: variant.id,
-            attributes: Object.fromEntries(
-              variant.attributes.map(attr => [
-                attr.attribute_id,
-                attr.attribute_value_id,
-              ])
-            ),
-            sku: variant.sku,
-            price: variant.price,
-            stock: variant.stock,
-            image_url: variant.image_url || this.placeholderImage,
-            status: variant.status,
-          })) : [],
-          status: product.status,
-          sku: product.variants.length ? product.variants[0].sku : '',
-          price: product.variants.length ? product.variants[0].price : product.price,
-          stock: product.variants.length ? product.variants[0].stock : product.stock,
-          image: product.variants.length ? product.variants[0].image_url : '',
+          image_urls: Array.isArray(product.images) && product.images.length ? product.images : [this.placeholderImage],
+          variants: product.variants && product.variants.length
+            ? product.variants.map(variant => {
+                console.log('Mapping variant:', variant);
+                return {
+                  id: variant.id || null,
+                  attributes: variant.attributes?.reduce((acc, attr) => {
+                    acc[attr.attribute_id] = attr.attribute_value_id;
+                    return acc;
+                  }, {}) || {},
+                  sku: variant.sku || '',
+                  price: variant.price || 0,
+                  stock: variant.stock || 0,
+                  image_url: variant.image_url || this.placeholderImage,
+                  status: variant.status || 'active',
+                };
+              })
+            : [],
+          status: product.status || 'pending',
+          sku: product.variants?.length ? product.variants[0]?.sku : product.sku || '',
+          price: product.variants?.length ? product.variants[0]?.price : product.price || 0,
+          stock: product.variants?.length ? product.variants[0]?.stock : product.stock || 0,
+          image: product.variants?.length ? product.variants[0]?.image_url : product.image || this.placeholderImage,
         };
+
+        console.log('Form after mapping:', this.form);
         await this.fetchAttributes();
-        this.form.variants.forEach(variant => {
-          Object.entries(variant.attributes).forEach(([attrId, valueId]) => {
-            if (attrId && valueId) {
-              this.$set(this.selectedAttributes, attrId, true);
+        if (this.form.variants.length && this.attributes.length) {
+          this.attributes.forEach(attr => {
+            if (this.form.variants.some(variant => variant.attributes[attr.id])) {
+              this.selectedAttributes[attr.id] = true;
             }
           });
-        });
+        } else {
+          console.log('No variants or attributes, selectedAttributes not updated', {
+            variants: this.form.variants,
+            attributes: this.attributes,
+          });
+        }
+        console.log('Form variants:', this.form.variants);
+        console.log('Selected attributes:', this.selectedAttributes);
       } catch (error) {
-        alert('Lỗi khi tải sản phẩm: ' + (error.response?.data?.message || 'Lỗi'));
+        console.error('Error fetching product:', error.response?.data || error.message);
+        alert('Lỗi khi tải sản phẩm: ' + (error.response?.data?.message || 'Lỗi hệ thống'));
       }
     },
     addPlaceholderImage() {
@@ -259,16 +352,87 @@ export default {
     setVariantPlaceholderImage(index) {
       this.form.variants[index].image_url = this.placeholderImage;
     },
-    confirmRemoveVariant(index) {
-      if (confirm('Bạn có chắc chắn muốn xóa biến thể này?')) {
-        this.form.variants.splice(index, 1);
+    showConfirmModal(action, data = null) {
+      this.modal = {
+        show: true,
+        action,
+        data,
+        title: this.getModalTitle(action),
+        message: this.getModalMessage(action),
+        confirmText: 'Xác nhận',
+        cancelText: 'Hủy',
+      };
+    },
+    getModalTitle(action) {
+      switch (action) {
+        case 'submit':
+          return this.isEditMode ? 'Xác nhận cập nhật' : 'Xác nhận đăng bán';
+        case 'cancel':
+          return 'Xác nhận hủy';
+        case 'removeVariant':
+          return 'Xác nhận xóa biến thể';
+        default:
+          return 'Xác nhận';
       }
     },
+    getModalMessage(action) {
+      switch (action) {
+        case 'submit':
+          return this.isEditMode
+            ? 'Bạn có chắc chắn muốn cập nhật sản phẩm này?'
+            : 'Bạn có chắc chắn muốn đăng bán sản phẩm này?';
+        case 'cancel':
+          return 'Bạn có chắc chắn muốn hủy và quay lại danh sách sản phẩm? Dữ liệu chưa lưu sẽ bị mất.';
+        case 'removeVariant':
+          return 'Bạn có chắc chắn muốn xóa biến thể này?';
+        default:
+          return 'Bạn có chắc chắn muốn thực hiện hành động này?';
+      }
+    },
+    handleModalConfirm() {
+      switch (this.modal.action) {
+        case 'submit':
+          this.submitProduct();
+          break;
+        case 'cancel':
+          this.$router.push('/seller/products/all');
+          break;
+        case 'removeVariant':
+          this.removeVariant(this.modal.data);
+          break;
+      }
+      this.modal.show = false;
+    },
+    handleModalCancel() {
+      this.modal.show = false;
+      this.modal.action = null;
+      this.modal.data = null;
+    },
+    removeVariant(index) {
+      this.form.variants.splice(index, 1);
+      console.log('Removed variant at index:', index, 'Variants:', this.form.variants);
+    },
     updateSelectedAttributes() {
+      console.log('Updating selected attributes:', this.selectedAttributes);
+      const prevVariants = [...this.form.variants];
       this.form.variants = [];
       if (Object.keys(this.selectedAttributes).some(key => this.selectedAttributes[key])) {
+        if (prevVariants.length) {
+          prevVariants.forEach(variant => {
+            const newVariant = {
+              ...variant,
+              attributes: Object.fromEntries(
+                this.selectedAttributesList.map(attr => [attr.id, variant.attributes[attr.id] || null])
+              ),
+            };
+            if (Object.values(newVariant.attributes).every(val => val)) {
+              this.form.variants.push(newVariant);
+            }
+          });
+        }
         this.addManualVariant();
       }
+      console.log('Variants after update:', this.form.variants);
     },
     addManualVariant() {
       if (!Object.keys(this.selectedAttributes).some(key => this.selectedAttributes[key])) {
@@ -276,6 +440,7 @@ export default {
         return;
       }
       const newVariant = {
+        id: null,
         attributes: Object.fromEntries(
           this.selectedAttributesList.map(attr => [attr.id, null])
         ),
@@ -286,6 +451,7 @@ export default {
         status: 'active',
       };
       this.form.variants.push(newVariant);
+      console.log('Added new variant:', newVariant);
     },
     validateVariant(variant) {
       const attrCombo = Object.values(variant.attributes).join('-');
@@ -306,12 +472,16 @@ export default {
         alert('Vui lòng chọn đầy đủ giá trị thuộc tính cho tất cả biến thể!');
         return;
       }
+      if (!this.form.category_id) {
+        alert('Vui lòng chọn danh mục sản phẩm!');
+        return;
+      }
       this.isLoading = true;
       try {
         const token = localStorage.getItem('token');
         const formData = new FormData();
         formData.append('name', this.form.name);
-        formData.append('description', this.form.description);
+        formData.append('description', this.form.description || '');
         formData.append('category_id', this.form.category_id);
         formData.append('status', this.isEditMode ? this.form.status : 'pending');
         this.form.image_urls.forEach((url, index) => {
@@ -324,10 +494,8 @@ export default {
               formData.append(`variants[${index}][id]`, variant.id);
             }
             Object.entries(variant.attributes).forEach(([attrId, valueId], attrIndex) => {
-              if (valueId) {
-                formData.append(`variants[${index}][attributes][${attrIndex}][attribute_id]`, attrId);
-                formData.append(`variants[${index}][attributes][${attrIndex}][attribute_value_id]`, valueId);
-              }
+              formData.append(`variants[${index}][attributes][${attrIndex}][attribute_id]`, attrId);
+              formData.append(`variants[${index}][attributes][${attrIndex}][attribute_value_id]`, valueId);
             });
             formData.append(`variants[${index}][sku]`, variant.sku);
             formData.append(`variants[${index}][price]`, variant.price);
@@ -358,7 +526,7 @@ export default {
         this.$router.push('/seller/products');
       } catch (error) {
         console.error('Lỗi khi lưu sản phẩm:', error.response?.data);
-        alert('Lỗi khi lưu sản phẩm: ' + (error.response?.data?.message || 'Lỗi không xác định'));
+        alert('Lỗi khi lưu sản phẩm: ' + (error.response?.data?.message || 'Lỗi hệ thống'));
       } finally {
         this.isLoading = false;
       }

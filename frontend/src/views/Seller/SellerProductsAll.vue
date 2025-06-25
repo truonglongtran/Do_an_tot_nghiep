@@ -9,9 +9,6 @@
       v-model:searchQuery="search"
       @search="debouncedApplySearch"
     />
-    <div class="flex justify-end mb-4">
-      <button @click="$router.push('/seller/products/add')" class="bg-blue-500 text-white p-2 rounded">Thêm sản phẩm</button>
-    </div>
     <div class="overflow-x-auto">
       <p v-if="filteredProducts.length === 0" class="text-center text-gray-500">Không tìm thấy sản phẩm nào.</p>
       <table v-else class="min-w-full table-auto border border-gray-300 eds-table">
@@ -116,9 +113,21 @@
                   </td>
                   <td style="width: 150px; padding: 0.5rem; text-align: center;">
                     <label class="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" v-model="variant.status" @change="toggleVariantStatus(variant)" :true-value="'active'" :false-value="'inactive'" class="sr-only peer">
-                      <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600">
-                        <div class="w-5 h-5 bg-white rounded-full shadow-md transform peer-checked:translate-x-5 transition-transform"></div>
+                      <input
+                        type="checkbox"
+                        class="sr-only peer"
+                        :checked="variant.status === 'active'"
+                        @click.prevent="openToggleConfirmModal(variant, variant.status === 'active' ? 'inactive' : 'active')"
+                        :disabled="variant.isLoading"
+                      />
+                      <div
+                        class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-green-600 transition-colors duration-200"
+                        :class="{ 'opacity-50 cursor-not-allowed': variant.isLoading }"
+                      >
+                        <div
+                          class="w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200"
+                          :class="{ 'translate-x-6': variant.status === 'active' }"
+                        ></div>
                       </div>
                     </label>
                   </td>
@@ -130,17 +139,29 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Modal xác nhận -->
+    <SellerConfirmModal
+      :show="showConfirmModal"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :confirmText="'Xác nhận'"
+      :cancelText="'Hủy'"
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+    />
   </div>
 </template>
-
 <script>
 import axios from 'axios';
 import FilterSearch from './component/SellerFilterSearch.vue';
+import SellerConfirmModal from './component/SellerConfirmModal.vue';
 
 export default {
   name: 'SellerProductsAll',
   components: {
-    FilterSearch
+    FilterSearch,
+    SellerConfirmModal
   },
   data() {
     return {
@@ -159,7 +180,12 @@ export default {
         banned: 'Bị cấm'
       },
       debouncedApplySearch: null,
-      validAttributeValues: {} // Sẽ được tải từ API
+      validAttributeValues: {},
+      showConfirmModal: false,
+      confirmTitle: 'Xác nhận',
+      confirmMessage: '',
+      selectedVariant: null,
+      newStatus: null
     };
   },
   computed: {
@@ -231,7 +257,13 @@ export default {
           headers: { Authorization: `Bearer ${token}` }
         });
         console.log('API response:', response.data);
-        this.allProducts = response.data.data || [];
+        this.allProducts = (response.data.data || []).map(product => ({
+          ...product,
+          variants: product.variants.map(variant => ({
+            ...variant,
+            isLoading: false // Thêm isLoading cho mỗi variant
+          }))
+        }));
         this.updateFilterCounts();
       } catch (error) {
         console.error('Error fetching products:', error);
@@ -250,20 +282,68 @@ export default {
       console.log('Applying search with:', { search: this.search, currentFilter: this.currentFilter });
       this.updateFilterCounts();
     },
+    openToggleConfirmModal(variant, newStatus) {
+      console.log('Opening toggle confirm modal for variant:', variant.id, 'New status:', newStatus);
+      this.selectedVariant = { ...variant };
+      this.newStatus = newStatus;
+      this.confirmTitle = 'Xác nhận thay đổi trạng thái';
+      this.confirmMessage = `Bạn có chắc chắn muốn thay đổi trạng thái của biến thể "${this.getPrimaryAttribute(variant) || 'N/A'}" thành ${newStatus === 'active' ? 'Hoạt động' : 'Ngừng hoạt động'}?`;
+      this.showConfirmModal = true;
+    },
+    async handleConfirm() {
+      console.log('Handling confirm action for variant:', this.selectedVariant?.id, 'New status:', this.newStatus);
+      if (!this.selectedVariant || !this.newStatus) {
+        console.error('Missing selectedVariant or newStatus');
+        alert('Lỗi: Thiếu thông tin xác nhận.');
+        this.resetModal();
+        return;
+      }
+      const product = this.allProducts.find(p => p.variants.some(v => v.id === this.selectedVariant.id));
+      const variant = product?.variants.find(v => v.id === this.selectedVariant.id);
+      if (!variant) {
+        console.error('Variant not found:', this.selectedVariant.id);
+        alert('Lỗi: Không tìm thấy biến thể.');
+        this.resetModal();
+        return;
+      }
+      await this.toggleVariantStatus(variant);
+      this.resetModal();
+    },
+    handleCancel() {
+      console.log('Handling cancel action');
+      this.resetModal();
+    },
+    resetModal() {
+      console.log('Resetting modal state');
+      this.showConfirmModal = false;
+      this.selectedVariant = null;
+      this.newStatus = null;
+      this.confirmTitle = 'Xác nhận';
+      this.confirmMessage = '';
+    },
     async toggleVariantStatus(variant) {
+      console.log('Toggling status for variant:', variant.id, 'New status:', this.newStatus);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+        this.$router.push('/seller/login');
+        return;
+      }
+      variant.isLoading = true;
       try {
-        const token = localStorage.getItem('token');
         await axios.put(`http://localhost:8000/api/seller/variants/${variant.id}/status`, {
-          status: variant.status
+          status: this.newStatus
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        variant.status = this.newStatus;
         alert('Cập nhật trạng thái biến thể thành công');
-        await this.fetchProducts();
       } catch (error) {
         console.error('Error updating variant status:', error);
         alert('Lỗi khi cập nhật trạng thái biến thể: ' + (error.response?.data?.message || error.message));
-        variant.status = variant.status === 'active' ? 'inactive' : 'active';
+      } finally {
+        variant.isLoading = false;
+        await this.fetchProducts(); // Tải lại danh sách sản phẩm để đảm bảo đồng bộ
       }
     },
     editProduct(id) {
@@ -343,45 +423,11 @@ export default {
   }
 };
 </script>
-
 <style scoped>
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 60px;
-  height: 34px;
+.transition-transform {
+  transition: transform 0.3s ease;
 }
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  transition: 0.4s;
-  border-radius: 34px;
-}
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 26px;
-  width: 26px;
-  left: 4px;
-  bottom: 4px;
-  background-color: white;
-  transition: 0.4s;
-  border-radius: 50%;
-}
-input:checked + .slider {
-  background-color: #2196F3;
-}
-input:checked + .slider:before {
-  transform: translateX(26px);
+.transition-colors {
+  transition: background-color 0.3s ease;
 }
 </style>

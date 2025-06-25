@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -17,6 +18,8 @@ return new class extends Migration
             $table->enum('status', ['pending', 'approved', 'banned'])->default('pending');
             $table->decimal('price', 10, 2)->nullable(); // Price for products without variants
             $table->integer('stock')->nullable(); // Stock for products without variants
+            $table->integer('view_count')->default(0); // Lượt xem sản phẩm
+            $table->integer('sold_count')->default(0); // Số lượng sản phẩm đã bán
             $table->timestamps();
             $table->softDeletes();
         });
@@ -27,4 +30,3 @@ return new class extends Migration
         Schema::dropIfExists('products');
     }
 };
-?>

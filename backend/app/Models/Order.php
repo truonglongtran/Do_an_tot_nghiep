@@ -1,25 +1,27 @@
 <?php
-
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
-    use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
-        'buyer_id',
-        'seller_id',
-        'settled_status',
-        'settled_at',
-        'shipping_status',
-        'order_status',
+        'buyer_id', 'seller_id', 'address_id', 'settled_status', 'settled_at',
+        'shipping_status', 'order_status', 'payment_method', 'subtotal',
+        'shipping_fee', 'voucher_id', 'shipping_voucher_id', 'total_discount',
+        'total', 'shipping_partner_id', 'tracking_code',
     ];
 
-    protected $appends = ['total_amount'];
+    protected $casts = [
+        'subtotal' => 'decimal:2',
+        'shipping_fee' => 'decimal:2',
+        'total_discount' => 'decimal:2',
+        'total' => 'decimal:2',
+        'settled_at' => 'datetime',
+    ];
 
     public function buyer()
     {
@@ -31,58 +33,28 @@ class Order extends Model
         return $this->belongsTo(User::class, 'seller_id');
     }
 
+    public function address()
+    {
+        return $this->belongsTo(BuyerAddress::class, 'address_id');
+    }
+
+    public function shippingPartner()
+    {
+        return $this->belongsTo(ShippingPartner::class, 'shipping_partner_id');
+    }
+
     public function items()
     {
-        return $this->hasMany(OrderItem::class); // Loại bỏ ->with('productVariant')
+        return $this->hasMany(OrderItem::class);
     }
 
-    public function payments()
+    public function voucher()
     {
-        return $this->hasMany(Payment::class);
+        return $this->belongsTo(Voucher::class, 'voucher_id');
     }
 
-    public function disputes()
+    public function shippingVoucher()
     {
-        return $this->hasMany(Dispute::class);
-    }
-
-    public function getTotalAmountAttribute()
-    {
-        // Đảm bảo items được tải
-        if (!$this->relationLoaded('items')) {
-            $this->load('items.productVariant');
-        }
-
-        if ($this->items->isEmpty()) {
-            Log::warning('No items found for order', ['order_id' => $this->id]);
-            return 0;
-        }
-
-        $total = $this->items->sum(function ($item) {
-            if (!$item->productVariant) {
-                Log::warning('ProductVariant not found for OrderItem', [
-                    'order_id' => $this->id,
-                    'item_id' => $item->id,
-                    'variant_id' => $item->product_variant_id,
-                ]);
-                // Fallback to item price if available
-                $price = isset($item->price) && is_numeric($item->price) ? floatval($item->price) : 0;
-                return $price * $item->quantity;
-            }
-
-            $price = is_numeric($item->productVariant->price) ? floatval($item->productVariant->price) : 0;
-            Log::debug('OrderItem Total', [
-                'order_id' => $this->id,
-                'item_id' => $item->id,
-                'variant_id' => $item->product_variant_id,
-                'price' => $price,
-                'quantity' => $item->quantity,
-                'subtotal' => $price * $item->quantity,
-            ]);
-            return $price * $item->quantity;
-        });
-
-        Log::info('Order Total Amount', ['order_id' => $this->id, 'total' => $total, 'item_count' => $this->items->count()]);
-        return $total;
+        return $this->belongsTo(Voucher::class, 'shipping_voucher_id');
     }
 }

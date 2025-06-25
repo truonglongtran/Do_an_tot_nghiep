@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import Login from '../views/Login/Login.vue';
 import AdminLayout from '../views/Admin/AdminLayout.vue';
 import SellerLayout from '../views/Seller/SellerLayout.vue';
-import BuyerDashboard from '../views/Buyer/BuyerDashboard.vue';
+import BuyerLayout from '../views/Buyer/BuyerLayout.vue';
 
 const routes = [
   {
@@ -250,12 +250,28 @@ const routes = [
           permissions: { seller: ['view', 'update'] },
         },
       },
-      {
+     {
         path: 'products/add',
         component: () => import('@/views/Seller/SellerProductsAdd.vue'),
         meta: {
           roles: ['seller'],
           permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'products/edit/:id',
+        component: () => import('@/views/Seller/SellerProductsAdd.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'customer-service/reviews',
+        component: () => import('@/views/Seller/SellerReviews.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view'] },
         },
       },
       {
@@ -273,10 +289,94 @@ const routes = [
     ],
   },  
   {
-    path: '/buyer/dashboard',
-    name: 'BuyerDashboard',
-    component: BuyerDashboard,
-    meta: { requiresAuth: true, roles: ['buyer', 'seller'], loginPath: '/buyer/login' },
+    path: '/',
+    component: BuyerLayout,
+    children: [
+      {
+        path: '',
+        name: 'Home',
+        component: () => import('@/views/Buyer/Home.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'cart',
+        name: 'Cart',
+        component: () => import('@/views/Buyer/Cart.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/messages',
+        name: 'BuyerMessages',
+        component: () => import('@/views/Buyer/BuyerMessages.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/notifications',
+        name: 'BuyerNotifications',
+        component: () => import('@/views/Buyer/BuyerNotifications.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'search',
+        name: 'Search',
+        component: () => import('@/views/Buyer/Search.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'products/:id',
+        name: 'ProductDetail',
+        component: () => import('@/views/Buyer/ProductDetail.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'categories',
+        name: 'CategoryAll',
+        component: () => import('@/views/Buyer/CategoryAll.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'categories/:slug',
+        name: 'CategoryDetail',
+        component: () => import('@/views/Buyer/CategoryDetail.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'shops/:id',
+        name: 'Shop',
+        component: () => import('@/views/Buyer/Shop.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'orders',
+        name: 'Orders',
+        component: () => import('@/views/Buyer/Orders.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'orders/create',
+        name: 'OrderCreate',
+        component: () => import('@/views/Buyer/OrderCreate.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'reviews',
+        name: 'Reviews',
+        component: () => import('@/views/Buyer/Reviews.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'addresses',
+        name: 'Addresses',
+        component: () => import('@/views/Buyer/Addresses.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'loyalty-points',
+        name: 'LoyaltyPoints',
+        component: () => import('@/views/Buyer/LoyaltyPoints.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+    ],
   },
   {
     path: '/:pathMatch(.*)*',
@@ -303,7 +403,7 @@ router.beforeEach((to, from, next) => {
     } else if (loginType === 'seller') {
       return next('/seller/dashboard');
     } else {
-      return next('/buyer/dashboard');
+      return next('/');
     }
   }
 
@@ -322,7 +422,7 @@ router.beforeEach((to, from, next) => {
       } else if (loginType === 'seller') {
         return next('/seller/dashboard');
       } else {
-        return next('/buyer/dashboard');
+        return next('/');
       }
     }
 

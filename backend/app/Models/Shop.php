@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -49,10 +48,13 @@ class Shop extends Model
         return $this->hasMany(BannerPlacement::class);
     }
 
+    public function shopFollowers()
+    {
+        return $this->hasMany(ShopFollower::class, 'shop_id');
+    }
 
     public function getReviewCountAttribute()
     {
-        // Temporary workaround to debug
         return \DB::table('reviews')
             ->join('products', 'reviews.product_id', '=', 'products.id')
             ->where('products.shop_id', $this->id)

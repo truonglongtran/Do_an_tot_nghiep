@@ -5,6 +5,11 @@
         <h2 class="text-2xl font-bold text-gray-800">
           Đánh giá của cửa hàng: {{ shopName }}
         </h2>
+        <div class="text-sm text-gray-600">
+          <p>Điểm trung bình: <span class="font-semibold">{{ shopStats.average_rating || 0 }}</span></p>
+          <p>Đánh giá tốt: <span class="font-semibold text-green-600">{{ shopStats.good_reviews || 0 }}</span></p>
+          <p>Đánh giá xấu: <span class="font-semibold text-red-600">{{ shopStats.bad_reviews || 0 }}</span></p>
+        </div>
       </div>
       <FilterSearch
         :filters="filters"
@@ -54,13 +59,23 @@
               </div>
               <span v-else>Không có</span>
             </td>
-            <td class="p-3 border-b text-center">
+            <td class="p-3 border-b text-center space-x-2">
               <button
                 @click="openReviewModal(review)"
                 class="text-blue-600 hover:underline"
               >
                 Xem chi tiết
               </button>
+              <!-- Comment nút Ẩn -->
+              <!--
+              <button
+                v-if="!review.is_hidden"
+                @click="showConfirmModal('hideReview', review.id)"
+                class="text-red-600 hover:underline"
+              >
+                Ẩn
+              </button>
+              -->
             </td>
             <td class="p-3 border-b">{{ formatDate(review.created_at) }}</td>
           </tr>
@@ -76,22 +91,42 @@
       title="Chi tiết đánh giá"
       @close="closeReviewModal"
     />
+
+    <!-- Comment Confirm Modal for Hiding Review -->
+    <!--
+    <ConfirmModal
+      :show="modal.show"
+      :title="modal.title"
+      :message="modal.message"
+      :confirmText="modal.confirmText"
+      :cancelText="modal.cancelText"
+      @confirm="handleModalConfirm"
+      @cancel="handleModalCancel"
+    />
+    -->
   </div>
 </template>
 
 <script>
 import axios from 'axios';
-import FilterSearch from '@/components/FilterSearch.vue';
-import GenericDetailsModal from '@/components/GenericDetailsModal.vue';
+import FilterSearch from './component/SellerFilterSearch.vue';
+import GenericDetailsModal from './component/GenericDetailsModal.vue';
+// import ConfirmModal from './component/SellerConfirmModal.vue'; // Comment import
 
 export default {
   name: 'SellerReviews',
-  components: { FilterSearch, GenericDetailsModal },
+  components: { FilterSearch, GenericDetailsModal /*, ConfirmModal*/ }, // Comment ConfirmModal
   data() {
     return {
       reviews: [],
-      shop: null,
-      shopName: 'Unknown Shop',
+      shopName: '',
+      shopStats: {
+        id: null,
+        name: '',
+        average_rating: 0,
+        good_reviews: 0,
+        bad_reviews: 0,
+      },
       errorMessage: '',
       searchQuery: '',
       ratingFilter: 'all',
@@ -99,6 +134,15 @@ export default {
       endDate: '',
       showModal: false,
       selectedReview: null,
+      modal: {
+        show: false,
+        title: '',
+        message: '',
+        confirmText: 'Xác nhận',
+        cancelText: 'Hủy',
+        action: null,
+        data: null,
+      },
       reviewFields: [
         { label: 'Người đánh giá', key: 'buyer.email', type: 'text' },
         { label: 'Sản phẩm', key: 'product.name', type: 'text' },
@@ -178,27 +222,79 @@ export default {
         if (!token) {
           throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
         }
-        const response = await axios.get('/api/seller/reviews', {
+        const response = await axios.get('/seller/reviews', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.data.success) {
-          this.reviews = response.data.data;
-          this.shop = response.data.shop;
-          this.shopName = this.shop?.name || 'Unknown Shop';
+          this.reviews = response.data.data || [];
+          this.shopStats = response.data.shop || {
+            id: null,
+            name: 'Cửa hàng của bạn',
+            average_rating: 0,
+            good_reviews: 0,
+            bad_reviews: 0,
+          };
+          this.shopName = this.shopStats.name;
           this.errorMessage = '';
         } else {
-          throw new Error(response.data.message);
+          throw new Error(response.data.message || 'Lỗi khi tải đánh giá');
         }
       } catch (error) {
-        console.error('Error fetching reviews:', error);
+        console.error('Error fetching reviews:', error.response || error);
         this.errorMessage = error.response?.status === 401
           ? 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.'
-          : 'Không thể tải danh sách đánh giá. Vui lòng thử lại sau.';
+          : error.message || 'Không thể tải danh sách đánh giá. Vui lòng thử lại sau.';
         if (error.response?.status === 401) {
           this.$router.push('/seller/login');
         }
       }
     },
+    /*
+    async hideReview(reviewId) {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await axios.patch(`/seller/reviews/${reviewId}/hide`, {}, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.data.success) {
+          const review = this.reviews.find(r => r.id === reviewId);
+          if (review) {
+            review.is_hidden = true;
+          }
+          alert('Ẩn đánh giá thành công');
+        } else {
+          throw new Error(response.data.message || 'Lỗi khi ẩn đánh giá');
+        }
+      } catch (error) {
+        console.error('Error hiding review:', error.response || error);
+        alert('Lỗi khi ẩn đánh giá: ' + (error.response?.data?.message || 'Lỗi hệ thống'));
+      }
+    },
+    showConfirmModal(action, data = null) {
+      this.modal = {
+        show: true,
+        action,
+        data,
+        title: action === 'hideReview' ? 'Xác nhận ẩn đánh giá' : 'Xác nhận',
+        message: action === 'hideReview' ? 'Bạn có chắc chắn muốn ẩn đánh giá này?' : 'Bạn có chắc chắn muốn thực hiện hành động này?',
+        confirmText: 'Xác nhận',
+        cancelText: 'Hủy',
+      };
+    },
+    handleModalConfirm() {
+      if (this.modal.action === 'hideReview') {
+        this.hideReview(this.modal.data);
+      }
+      this.modal.show = false;
+      this.modal.action = null;
+      this.modal.data = null;
+    },
+    handleModalCancel() {
+      this.modal.show = false;
+      this.modal.action = null;
+      this.modal.data = null;
+    },
+    */
     parseImages(images) {
       if (!images) return [];
       if (Array.isArray(images)) return images;

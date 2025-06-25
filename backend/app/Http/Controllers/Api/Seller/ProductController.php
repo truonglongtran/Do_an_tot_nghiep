@@ -140,6 +140,84 @@ class ProductController extends Controller
         }
     }
 
+    public function show(Request $request, $id)
+    {
+        try {
+            $sellerId = $request->user()->id;
+            $shop = Shop::where('owner_id', $sellerId)->first();
+            if (!$shop) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy shop của người bán',
+                ], 404);
+            }
+
+            $product = Product::where('id', $id)
+                ->where('shop_id', $shop->id)
+                ->with([
+                    'category' => fn($q) => $q->select('id', 'name'),
+                    'variants' => fn($q) => $q->select('id', 'product_id', 'sku', 'price', 'stock', 'image_url', 'status'),
+                    'variants.variantAttributes' => fn($q) => $q->select(
+                        'product_variant_attributes.id',
+                        'product_variant_attributes.product_variant_id',
+                        'product_variant_attributes.attribute_id',
+                        'product_variant_attributes.attribute_value_id'
+                    )
+                ])
+                ->first();
+
+            if (!$product) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy sản phẩm',
+                ], 404);
+            }
+
+            $data = [
+                'id' => $product->id,
+                'name' => $product->name,
+                'description' => $product->description,
+                'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
+                'images' => $product->images ?? [],
+                'status' => $product->status,
+                'price' => $product->price,
+                'stock' => $product->stock,
+                'sku' => $product->variants->count() ? $product->variants->first()->sku : $product->sku,
+                'image' => $product->variants->count() ? $product->variants->first()->image_url : $product->image,
+                'variants' => $product->variants->map(function ($variant) {
+                    return [
+                        'id' => $variant->id,
+                        'sku' => $variant->sku,
+                        'price' => $variant->price,
+                        'stock' => $variant->stock,
+                        'image_url' => $variant->image_url,
+                        'status' => $variant->status,
+                        'attributes' => $variant->variantAttributes->map(function ($attr) {
+                            return [
+                                'attribute_id' => $attr->attribute_id,
+                                'attribute_value_id' => $attr->attribute_value_id,
+                            ];
+                        }),
+                    ];
+                }),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching product', [
+                'seller_id' => $sellerId,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy sản phẩm: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function store(Request $request)
     {
         try {
@@ -153,7 +231,6 @@ class ProductController extends Controller
                 ], 404);
             }
 
-            // Kiểm tra xem danh mục có thuộc tính hay không
             $hasAttributes = DB::table('category_attribute')
                 ->where('category_id', $request->input('category_id'))
                 ->exists();
@@ -244,7 +321,6 @@ class ProductController extends Controller
                         }
                     }
                 } else {
-                    // Tạo một biến thể mặc định cho sản phẩm không có thuộc tính
                     ProductVariant::create([
                         'product_id' => $product->id,
                         'sku' => $request->input('sku'),
@@ -308,7 +384,6 @@ class ProductController extends Controller
                 ], 404);
             }
 
-            // Kiểm tra xem danh mục có thuộc tính hay không
             $hasAttributes = DB::table('category_attribute')
                 ->where('category_id', $request->input('category_id'))
                 ->exists();
@@ -406,7 +481,6 @@ class ProductController extends Controller
                         }
                     }
                 } else {
-                    // Cập nhật biến thể mặc định
                     $variant = $product->variants->first();
                     if ($variant) {
                         $variant->update([
@@ -426,7 +500,6 @@ class ProductController extends Controller
                             'status' => 'active',
                         ]);
                     }
-                    // Xóa thuộc tính nếu có
                     ProductVariantAttribute::where('product_variant_id', $product->variants->first()->id)->delete();
                 }
             });
@@ -564,4 +637,3 @@ class ProductController extends Controller
         }
     }
 }
-?>

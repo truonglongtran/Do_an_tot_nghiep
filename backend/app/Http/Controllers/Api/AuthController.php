@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -41,7 +42,13 @@ class AuthController extends Controller
                 $token = $admin->createToken('admin-token', ['role:' . $admin->role])->plainTextToken;
                 return response()->json([
                     'token' => $token,
-                    'user' => $admin,
+                    'user' => [
+                        'id' => $admin->id,
+                        'email' => $admin->email,
+                        'username' => $admin->username ?? 'Admin', // Fallback nếu Admin không có username
+                        'avatar_url' => $admin->avatar_url ?? 'https://via.placeholder.com/50',
+                        'role' => $admin->role,
+                    ],
                     'role' => $admin->role,
                     'loginType' => 'admin',
                 ], 200);
@@ -56,7 +63,13 @@ class AuthController extends Controller
                 $token = $user->createToken('user-token', ['role:' . $user->role])->plainTextToken;
                 return response()->json([
                     'token' => $token,
-                    'user' => $user,
+                    'user' => [
+                        'id' => $user->id,
+                        'email' => $user->email,
+                        'username' => $user->username ?? 'Người dùng',
+                        'avatar_url' => $user->avatar_url ?? 'https://via.placeholder.com/50',
+                        'role' => $user->role,
+                    ],
                     'role' => $user->role,
                     'loginType' => $type,
                 ], 200);

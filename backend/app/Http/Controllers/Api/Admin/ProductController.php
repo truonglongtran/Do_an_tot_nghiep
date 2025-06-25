@@ -12,7 +12,6 @@ class ProductController extends Controller
 {
     public function __construct()
     {
-        // Apply middleware to ensure only authorized admins can access
         $this->middleware('auth:sanctum');
         $this->middleware(function ($request, $next) {
             $user = $request->user();
@@ -26,55 +25,87 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         try {
+            Log::info('Fetching products with params:', $request->all()); // Debug request params
             $query = Product::with([
                 'category' => fn($q) => $q->select('id', 'name'),
-                'variants.attributes' => fn($q) => $q->select(
+                'variants' => fn($q) => $q->select('id', 'product_id', 'sku', 'price', 'stock', 'image_url', 'status'),
+                'variants.variantAttributes' => fn($q) => $q->select(
                     'product_variant_attributes.id',
                     'product_variant_attributes.product_variant_id',
                     'attributes.name as attribute_name',
                     'attribute_values.value as attribute_value'
                 )
-                ->leftJoin('attributes', 'product_variant_attributes.attribute_id', '=', 'attributes.id')
-                ->leftJoin('attribute_values', 'product_variant_attributes.attribute_value_id', '=', 'attribute_values.id'),
-                'variants.orderItems' => fn($q) => $q->select(
-                    'order_items.product_variant_id',
-                    DB::raw('SUM(order_items.quantity) as total_sales')
-                )->groupBy('order_items.product_variant_id')
+                ->join('attributes', 'product_variant_attributes.attribute_id', '=', 'attributes.id')
+                ->join('attribute_values', 'product_variant_attributes.attribute_value_id', '=', 'attribute_values.id')
             ])->whereNull('deleted_at');
 
-            if ($request->has('search') && !empty($request->search)) {
-                $query->where('name', 'like', '%' . $request->search . '%');
-            }
-            if ($request->has('status') && in_array($request->status, ['pending', 'approved', 'banned'])) {
-                $query->where('status', $request->status);
-            }
-            if ($request->has('category_id') && is_numeric($request->category_id)) {
-                $query->where('category_id', $request->category_id);
-            }
-
-            $perPage = $request->input('per_page', 10);
-            $products = $query->paginate($perPage);
-
-            // Map products to include price_min, price_max, and total_sales
-            $products->getCollection()->transform(function ($product) {
-                $product->price_min = $product->variants->min('price') ?? 0;
-                $product->price_max = $product->variants->max('price') ?? 0;
-                $product->total_sales = $product->variants->sum(function ($variant) {
-                    return $variant->orderItems->sum('total_sales') ?? 0;
+            // Lọc theo search, status, category_id
+            if ($search = $request->input('search')) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhereHas('variants', function ($qv) use ($search) {
+                          $qv->where('sku', 'like', "%{$search}%");
+                      });
                 });
-                return $product;
+            }
+            if ($status = $request->input('status')) {
+                $query->where('status', $status);
+            }
+            if ($categoryId = $request->input('category_id')) {
+                $query->where('category_id', $categoryId);
+            }
+
+            $products = $query->get()->map(function ($product) {
+                $totalSales = DB::table('order_items')
+                    ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                    ->where('order_items.product_id', $product->id)
+                    ->where('orders.order_status', 'paid')
+                    ->sum('order_items.quantity');
+
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
+                    'images' => $product->images ? json_decode($product->images, true) : [],
+                    'thumbnail' => $product->images ? (json_decode($product->images, true)[0] ?? null) : ($product->variants->first()->image_url ?? null),
+                    'price_min' => $product->variants->count() ? $product->variants->min('price') : $product->price,
+                    'price_max' => $product->variants->count() ? $product->variants->max('price') : $product->price,
+                    'total_stock' => $product->variants->count() ? $product->variants->sum('stock') : $product->stock,
+                    'total_sales' => (int) $totalSales,
+                    'status' => $product->status,
+                    'variants' => $product->variants->map(function ($variant) {
+                        $variantSales = DB::table('order_items')
+                            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                            ->where('order_items.product_variant_id', $variant->id)
+                            ->where('orders.order_status', 'paid')
+                            ->sum('order_items.quantity');
+
+                        return [
+                            'id' => $variant->id,
+                            'sku' => $variant->sku,
+                            'price' => $variant->price,
+                            'stock' => $variant->stock,
+                            'image_url' => $variant->image_url,
+                            'status' => $variant->status,
+                            'sales' => (int) $variantSales,
+                            'attributes' => $variant->variantAttributes->map(function ($attr) {
+                                return [
+                                    'name' => $attr->attribute_name,
+                                    'value' => $attr->attribute_value,
+                                ];
+                            }),
+                        ];
+                    }),
+                ];
             });
 
             return response()->json([
-                'data' => $products->items(),
-                'current_page' => $products->currentPage(),
-                'last_page' => $products->lastPage(),
-                'per_page' => $products->perPage(),
-                'total' => $products->total(),
+                'success' => true,
+                'data' => $products,
             ]);
         } catch (\Exception $e) {
             Log::error('Error in ProductController::index: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['error' => 'Server error'], 500);
+            return response()->json(['error' => 'Lỗi máy chủ: ' . $e->getMessage()], 500);
         }
     }
 
@@ -83,32 +114,65 @@ class ProductController extends Controller
         try {
             $product = Product::with([
                 'category' => fn($q) => $q->select('id', 'name'),
-                'variants.attributes' => fn($q) => $q->select(
+                'variants' => fn($q) => $q->select('id', 'product_id', 'sku', 'price', 'stock', 'image_url', 'status'),
+                'variants.variantAttributes' => fn($q) => $q->select(
                     'product_variant_attributes.id',
                     'product_variant_attributes.product_variant_id',
                     'attributes.name as attribute_name',
                     'attribute_values.value as attribute_value'
                 )
-                ->leftJoin('attributes', 'product_variant_attributes.attribute_id', '=', 'attributes.id')
-                ->leftJoin('attribute_values', 'product_variant_attributes.attribute_value_id', '=', 'attribute_values.id'),
-                'variants.orderItems' => fn($q) => $q->select(
-                    'order_items.product_variant_id',
-                    DB::raw('SUM(order_items.quantity) as total_sales')
-                )->groupBy('order_items.product_variant_id')
+                ->join('attributes', 'product_variant_attributes.attribute_id', '=', 'attributes.id')
+                ->join('attribute_values', 'product_variant_attributes.attribute_value_id', '=', 'attribute_values.id')
             ])->whereNull('deleted_at')->findOrFail($id);
 
-            $product->price_min = $product->variants->min('price') ?? 0;
-            $product->price_max = $product->variants->max('price') ?? 0;
-            $product->total_sales = $product->variants->sum(function ($variant) {
-                return $variant->orderItems->sum('total_sales') ?? 0;
-            });
+            $totalSales = DB::table('order_items')
+                ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                ->where('order_items.product_id', $product->id)
+                ->where('orders.order_status', 'paid')
+                ->sum('order_items.quantity');
 
-            return response()->json($product);
+            $formattedProduct = [
+                'id' => $product->id,
+                'name' => $product->name,
+                'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
+                'images' => $product->images ? json_decode($product->images, true) : [],
+                'thumbnail' => $product->images ? (json_decode($product->images, true)[0] ?? null) : ($product->variants->first()->image_url ?? null),
+                'price_min' => $product->variants->count() ? $product->variants->min('price') : $product->price,
+                'price_max' => $product->variants->count() ? $product->variants->max('price') : $product->price,
+                'total_stock' => $product->variants->count() ? $product->variants->sum('stock') : $product->stock,
+                'total_sales' => (int) $totalSales,
+                'status' => $product->status,
+                'variants' => $product->variants->map(function ($variant) {
+                    $variantSales = DB::table('order_items')
+                        ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                        ->where('order_items.product_variant_id', $variant->id)
+                        ->where('orders.order_status', 'paid')
+                        ->sum('order_items.quantity');
+
+                    return [
+                        'id' => $variant->id,
+                        'sku' => $variant->sku,
+                        'price' => $variant->price,
+                        'stock' => $variant->stock,
+                        'image_url' => $variant->image_url,
+                        'status' => $variant->status,
+                        'sales' => (int) $variantSales,
+                        'attributes' => $variant->variantAttributes->map(function ($attr) {
+                            return [
+                                'name' => $attr->attribute_name,
+                                'value' => $attr->attribute_value,
+                            ];
+                        }),
+                    ];
+                }),
+            ];
+
+            return response()->json($formattedProduct);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json(['error' => 'Product not found'], 404);
+            return response()->json(['error' => 'Sản phẩm không tồn tại'], 404);
         } catch (\Exception $e) {
             Log::error('Error in ProductController::show: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['error' => 'Server error'], 500);
+            return response()->json(['error' => 'Lỗi máy chủ: ' . $e->getMessage()], 500);
         }
     }
 
@@ -123,16 +187,20 @@ class ProductController extends Controller
             $product->status = $request->status;
             $product->save();
 
-            return response()->json(['message' => 'Product status updated successfully', 'product' => $product]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Cập nhật trạng thái sản phẩm thành công',
+                'product' => $product
+            ]);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json(['error' => 'Product not found'], 404);
+            return response()->json(['error' => 'Sản phẩm không tồn tại'], 404);
         } catch (\Exception $e) {
             Log::error('Error in ProductController::updateStatus: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['error' => 'Server error'], 500);
+            return response()->json(['error' => 'Lỗi máy chủ: ' . $e->getMessage()], 500);
         }
     }
 
-    public function updateProductVariantStatus(Request $request, $id)
+    public function updateVariantStatus(Request $request, $id)
     {
         try {
             $request->validate([
@@ -140,15 +208,33 @@ class ProductController extends Controller
             ]);
 
             $variant = ProductVariant::whereNull('deleted_at')->findOrFail($id);
-            $variant->status = $request->status;
+            $variant->status = $request->input('status');
             $variant->save();
 
-            return response()->json(['message' => 'Variant status updated successfully', 'variant' => $variant]);
+            Log::info('Variant status updated', [
+                'variant_id' => $id,
+                'status' => $request->input('status'),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cập nhật trạng thái biến thể thành công',
+                'variant' => [
+                    'id' => $variant->id,
+                    'status' => $variant->status,
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dữ liệu không hợp lệ',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json(['error' => 'Variant not found'], 404);
+            return response()->json(['error' => 'Biến thể không tồn tại'], 404);
         } catch (\Exception $e) {
             Log::error('Error in ProductController::updateVariantStatus: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['error' => 'Server error'], 500);
+            return response()->json(['error' => 'Lỗi máy chủ: ' . $e->getMessage()], 500);
         }
     }
 
@@ -157,12 +243,15 @@ class ProductController extends Controller
         try {
             $product = Product::whereNull('deleted_at')->findOrFail($id);
             $product->delete();
-            return response()->json(['message' => 'Product and its variants deleted successfully'], 200);
+            return response()->json([
+                'success' => true,
+                'message' => 'Xóa sản phẩm và các biến thể thành công'
+            ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json(['error' => 'Product not found'], 404);
+            return response()->json(['error' => 'Sản phẩm không tồn tại'], 404);
         } catch (\Exception $e) {
             Log::error('Error in ProductController::destroy: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['error' => 'Server error'], 500);
+            return response()->json(['error' => 'Lỗi máy chủ: ' . $e->getMessage()], 500);
         }
     }
 }

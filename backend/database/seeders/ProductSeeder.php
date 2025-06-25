@@ -1,4 +1,5 @@
 <?php
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
@@ -40,6 +41,8 @@ class ProductSeeder extends Seeder
                 'shop_id' => $shops[array_rand($shops)],
                 'images' => json_encode($images),
                 'status' => 'approved',
+                'view_count' => rand(0, 1000), // Lượt xem ngẫu nhiên từ 0 đến 1000
+                'sold_count' => rand(0, 200), // Số lượng bán ngẫu nhiên từ 0 đến 200
             ];
 
             if ($isBook) {
