@@ -5,17 +5,17 @@
     <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
     <div v-if="isLoading" class="text-center">Đang tải...</div>
     <div v-else class="chat-container">
-      <!-- Danh sách Seller -->
+      <!-- Danh sách Buyer -->
       <div class="conversation-list">
         <div
           v-for="conversation in conversations"
-          :key="conversation.seller.id"
+          :key="conversation.buyer.id"
           class="conversation-item"
-          :class="{ 'selected': selectedSellerId === conversation.seller.id }"
-          @click="selectSeller(conversation.seller.id)"
+          :class="{ 'selected': selectedBuyerId === conversation.buyer.id }"
+          @click="selectBuyer(conversation.buyer.id)"
         >
-          <div class="seller-info">
-            <h3>{{ conversation.seller.username }}</h3>
+          <div class="buyer-info">
+            <h3>{{ conversation.buyer.username }}</h3>
             <p class="last-message">{{ conversation.last_message?.content || 'Chưa có tin nhắn' }}</p>
             <p class="timestamp">{{ formatDateTime(conversation.last_message?.created_at) }}</p>
           </div>
@@ -29,15 +29,15 @@
       </div>
 
       <!-- Cửa sổ chat -->
-      <div class="chat-window" v-if="selectedSellerId">
+      <div class="chat-window" v-if="selectedBuyerId">
         <div class="chat-header">
-          <h3>{{ selectedSeller?.username || 'Chọn một người bán để xem tin nhắn' }}</h3>
+          <h3>{{ selectedBuyer?.username || 'Chọn một người mua để xem tin nhắn' }}</h3>
         </div>
         <div class="chat-messages" ref="chatMessages">
           <div
             v-for="(message, index) in selectedMessages"
             :key="index"
-            :class="['message', message.sender_type === 'buyer' ? 'sent' : 'received']"
+            :class="['message', message.sender_type === 'seller' ? 'sent' : 'received']"
           >
             <p>{{ message.content }}</p>
             <span class="message-time">{{ formatDateTime(message.created_at) }}</span>
@@ -55,7 +55,7 @@
           />
           <button
             @click="sendMessage"
-            :disabled="sending || !newMessage.trim() || !selectedSellerId"
+            :disabled="sending || !newMessage.trim() || !selectedBuyerId"
             class="btn btn-send"
           >
             <span v-if="sending" class="spinner"></span>
@@ -64,7 +64,7 @@
         </div>
       </div>
       <div v-else class="chat-placeholder">
-        <p>Chọn một người bán để bắt đầu trò chuyện.</p>
+        <p>Chọn một người mua để bắt đầu trò chuyện.</p>
       </div>
     </div>
   </div>
@@ -75,10 +75,10 @@ import axios from 'axios';
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 export default {
-  name: 'BuyerMessages',
+  name: 'SellerMessages',
   setup() {
     const conversations = ref([]);
-    const selectedSellerId = ref(null);
+    const selectedBuyerId = ref(null);
     const selectedMessages = ref([]);
     const newMessage = ref('');
     const isLoading = ref(false);
@@ -86,7 +86,7 @@ export default {
     const errorMessage = ref('');
     const successMessage = ref('');
     const chatMessages = ref(null);
-    const currentBuyerId = ref(null);
+    const currentSellerId = ref(null);
 
     const fetchConversations = async () => {
       isLoading.value = true;
@@ -98,16 +98,16 @@ export default {
           throw new Error('Không tìm thấy token');
         }
         console.log('Fetching conversations with token:', token);
-        const response = await axios.get('/buyer/chats', {
+        const response = await axios.get('/seller/messages', {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('API response for conversations:', JSON.stringify(response.data, null, 2));
         conversations.value = response.data.data.conversations || [];
-        currentBuyerId.value = response.data.data.current_buyer_id;
+        currentSellerId.value = response.data.data.current_seller_id;
         console.log('Conversations:', JSON.stringify(conversations.value, null, 2));
-        console.log('Current Buyer ID:', currentBuyerId.value);
+        console.log('Current Seller ID:', currentSellerId.value);
         if (conversations.value.length === 0) {
-          console.warn('No conversations found for buyer');
+          console.warn('No conversations found for seller');
         }
       } catch (error) {
         console.error('Error fetching conversations:', error.response?.data || error.message);
@@ -115,35 +115,35 @@ export default {
         if (error.response?.status === 401) {
           console.log('Unauthorized, redirecting to login');
           localStorage.removeItem('token');
-          window.location.href = '/buyer/login';
+          window.location.href = '/seller/login';
         }
       } finally {
         isLoading.value = false;
       }
     };
 
-    const selectSeller = async (sellerId) => {
-      console.log('Selecting seller with ID:', sellerId);
-      if (!sellerId) {
-        console.warn('No sellerId provided');
-        errorMessage.value = 'Vui lòng chọn một người bán để xem tin nhắn';
+    const selectBuyer = async (buyerId) => {
+      console.log('Selecting buyer with ID:', buyerId);
+      if (!buyerId) {
+        console.warn('No buyerId provided');
+        errorMessage.value = 'Vui lòng chọn một người mua để xem tin nhắn';
         selectedMessages.value = [];
-        selectedSellerId.value = null;
+        selectedBuyerId.value = null;
         return;
       }
 
-      selectedSellerId.value = sellerId;
+      selectedBuyerId.value = buyerId;
       errorMessage.value = '';
       try {
         const token = localStorage.getItem('token');
-        console.log('Fetching messages for sellerId:', sellerId, 'with token:', token);
-        const response = await axios.get(`/buyer/chats/detail?seller_id=${sellerId}`, {
+        console.log('Fetching messages for buyerId:', buyerId, 'with token:', token);
+        const response = await axios.get(`/seller/messages/detail?buyer_id=${buyerId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('API response for messages:', JSON.stringify(response.data, null, 2));
         selectedMessages.value = response.data.data.messages || [];
-        await markMessagesAsRead(sellerId);
-        const conversation = conversations.value.find(c => c.seller.id === sellerId);
+        await markMessagesAsRead(buyerId);
+        const conversation = conversations.value.find(c => c.buyer.id === buyerId);
         if (conversation) {
           conversation.unread_count = 0;
           console.log('Updated conversation:', JSON.stringify(conversation, null, 2));
@@ -156,7 +156,7 @@ export default {
       } catch (error) {
         console.error('Error fetching messages:', error.response?.data || error.message);
         errorMessage.value = error.response?.data?.message || 'Lỗi khi tải tin nhắn';
-        if (error.response?.status === 404 && error.response?.data?.message === 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!') {
+        if (error.response?.status === 404 || error.response?.data?.message === 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!') {
           errorMessage.value = 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!';
           selectedMessages.value = [];
         }
@@ -164,23 +164,23 @@ export default {
     };
 
     const sendMessage = async () => {
-      if (!newMessage.value.trim() || !selectedSellerId.value) {
-        console.warn('Cannot send message: newMessage or selectedSellerId is empty', {
+      if (!newMessage.value.trim() || !selectedBuyerId.value) {
+        console.warn('Cannot send message: newMessage or selectedBuyerId is empty', {
           newMessage: newMessage.value,
-          selectedSellerId: selectedSellerId.value,
+          selectedBuyerId: selectedBuyerId.value,
         });
-        errorMessage.value = 'Vui lòng chọn người bán và nhập tin nhắn';
+        errorMessage.value = 'Vui lòng chọn người mua và nhập tin nhắn';
         return;
       }
       sending.value = true;
       errorMessage.value = '';
       try {
         const token = localStorage.getItem('token');
-        console.log('Sending message to sellerId:', selectedSellerId.value, 'with content:', newMessage.value);
+        console.log('Sending message to buyerId:', selectedBuyerId.value, 'with content:', newMessage.value);
         const response = await axios.post(
-          '/buyer/chats/send',
+          '/seller/messages/send',
           {
-            receiver_id: selectedSellerId.value,
+            receiver_id: selectedBuyerId.value,
             content: newMessage.value,
           },
           {
@@ -190,12 +190,12 @@ export default {
         console.log('API response for sent message:', JSON.stringify(response.data, null, 2));
         selectedMessages.value.push(response.data.data);
         newMessage.value = '';
-        const conversation = conversations.value.find(c => c.seller.id === selectedSellerId.value);
+        const conversation = conversations.value.find(c => c.buyer.id === selectedBuyerId.value);
         if (conversation) {
           conversation.last_message = response.data.data;
         } else {
           conversations.value.push({
-            seller: { id: selectedSellerId.value, username: selectedSeller.value?.username || 'Unknown', avatar_url: 'https://via.placeholder.com/50' },
+            buyer: { id: selectedBuyerId.value, username: 'Unknown' },
             last_message: response.data.data,
             unread_count: 0,
           });
@@ -216,14 +216,14 @@ export default {
       }
     };
 
-    const markMessagesAsRead = async (sellerId) => {
+    const markMessagesAsRead = async (buyerId) => {
       try {
         const token = localStorage.getItem('token');
-        console.log('Marking messages as read for sellerId:', sellerId);
-        await axios.put(`/buyer/chats/${sellerId}/read`, {}, {
+        console.log('Marking messages as read for buyerId:', buyerId);
+        await axios.put(`/seller/messages/${buyerId}/read`, {}, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log('Messages marked as read for sellerId:', sellerId);
+        console.log('Messages marked as read for buyerId:', buyerId);
       } catch (error) {
         console.error('Error marking messages as read:', error.response?.data || error.message);
       }
@@ -240,10 +240,10 @@ export default {
       });
     };
 
-    const selectedSeller = computed(() => {
-      const conversation = conversations.value.find(c => c.seller.id === selectedSellerId.value);
-      console.log('Selected seller:', JSON.stringify(conversation?.seller || null, null, 2));
-      return conversation ? conversation.seller : null;
+    const selectedBuyer = computed(() => {
+      const conversation = conversations.value.find(c => c.buyer.id === selectedBuyerId.value);
+      console.log('Selected buyer:', JSON.stringify(conversation?.buyer || null, null, 2));
+      return conversation ? conversation.buyer : null;
     });
 
     onMounted(() => {
@@ -253,13 +253,13 @@ export default {
 
     onUnmounted(() => {
       console.log('Component unmounted, resetting state');
-      selectedSellerId.value = null;
+      selectedBuyerId.value = null;
       selectedMessages.value = [];
     });
 
     return {
       conversations,
-      selectedSellerId,
+      selectedBuyerId,
       selectedMessages,
       newMessage,
       isLoading,
@@ -267,11 +267,11 @@ export default {
       errorMessage,
       successMessage,
       chatMessages,
-      currentBuyerId,
-      selectSeller,
+      currentSellerId,
+      selectBuyer,
       sendMessage,
       formatDateTime,
-      selectedSeller,
+      selectedBuyer,
     };
   },
 };
@@ -287,19 +287,19 @@ export default {
 h2 {
   font-size: 24px;
   font-weight: bold;
-  color: #f97316; /* Đồng bộ màu cam với Header.vue */
+  color: #333;
   margin-bottom: 20px;
 }
 .error-message {
-  background: #fee2e2; /* Đỏ nhạt, đồng bộ với Header.vue */
-  color: #dc2626; /* Đỏ đậm */
+  background: #ffe6e6;
+  color: #d32f2f;
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 20px;
 }
 .success-message {
-  background: #dcfce7; /* Xanh nhạt, đồng bộ với Header.vue */
-  color: #15803d; /* Xanh đậm */
+  background: #e6ffe6;
+  color: #2e7d32;
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 20px;
@@ -312,7 +312,6 @@ h2 {
 .conversation-list {
   width: 300px;
   background: #fff;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền với Header.vue */
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
@@ -322,7 +321,7 @@ h2 {
   justify-content: space-between;
   align-items: center;
   padding: 15px;
-  border-bottom: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border-bottom: 1px solid #ddd;
   cursor: pointer;
   transition: background-color 0.3s;
 }
@@ -330,19 +329,19 @@ h2 {
   background: #f5f5f5;
 }
 .conversation-item.selected {
-  background: #fff7ed; /* Nền cam nhạt khi chọn */
+  background: #e3f2fd;
 }
-.seller-info {
+.buyer-info {
   flex-grow: 1;
 }
-.seller-info h3 {
+.buyer-info h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937; /* Xám đậm, đồng bộ với Header.vue */
+  color: #333;
 }
 .last-message {
   font-size: 14px;
-  color: #6b7280; /* Xám trung, đồng bộ */
+  color: #555;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -350,10 +349,10 @@ h2 {
 }
 .timestamp {
   font-size: 12px;
-  color: #9ca3af; /* Xám nhạt, đồng bộ */
+  color: #888;
 }
 .unread-badge {
-  background: #dc2626; /* Đỏ, đồng bộ với Header.vue */
+  background: #d32f2f;
   color: #fff;
   border-radius: 12px;
   padding: 2px 8px;
@@ -363,7 +362,6 @@ h2 {
 .chat-window {
   flex-grow: 1;
   background: #fff;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền */
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
@@ -371,12 +369,12 @@ h2 {
 }
 .chat-header {
   padding: 15px;
-  border-bottom: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border-bottom: 1px solid #ddd;
 }
 .chat-header h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #f97316; /* Màu cam, đồng bộ với Header.vue */
+  color: #333;
 }
 .chat-messages {
   flex-grow: 1;
@@ -396,19 +394,19 @@ h2 {
   text-align: left;
 }
 .message p {
-  background: #fed7aa; /* Cam nhạt cho tin nhắn nhận, đồng bộ với Header.vue */
+  background: #e3f2fd;
   padding: 10px;
   border-radius: 8px;
   font-size: 14px;
-  color: #1f2937; /* Xám đậm */
+  color: #333;
 }
 .message.sent p {
-  background: #f97316; /* Cam, đồng bộ với Header.vue */
+  background: #0288d1;
   color: #fff;
 }
 .message-time {
   font-size: 12px;
-  color: #9ca3af; /* Xám nhạt, đồng bộ */
+  color: #888;
   margin-top: 5px;
   display: block;
 }
@@ -416,18 +414,18 @@ h2 {
   display: flex;
   gap: 10px;
   padding: 15px;
-  border-top: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border-top: 1px solid #ddd;
 }
 .chat-input input {
   flex-grow: 1;
   padding: 10px;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border: 1px solid #ccc;
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.3s;
 }
 .chat-input input:focus {
-  border-color: #f97316; /* Màu cam khi focus */
+  border-color: #0288d1;
   outline: none;
 }
 .btn {
@@ -439,14 +437,14 @@ h2 {
   transition: background-color 0.3s;
 }
 .btn-send {
-  background: #f97316; /* Màu cam, đồng bộ */
+  background: #0288d1;
   color: #fff;
 }
 .btn-send:hover {
-  background: #ea580c; /* Cam đậm khi hover */
+  background: #0277bd;
 }
 .btn-send:disabled {
-  background: #fb923c; /* Cam nhạt khi disabled */
+  background: #90caf9;
   cursor: not-allowed;
 }
 .spinner {
@@ -468,7 +466,6 @@ h2 {
   align-items: center;
   justify-content: center;
   background: #fff;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền */
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -477,7 +474,7 @@ h2 {
   padding: 20px;
 }
 .text-gray-500 {
-  color: #6b7280; /* Đồng bộ xám */
+  color: #6b7280;
 }
 @media (max-width: 768px) {
   .chat-container {

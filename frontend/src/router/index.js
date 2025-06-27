@@ -313,6 +313,14 @@ const routes = [
           permissions: { seller: ['view', 'update'] },
         },
       },
+      {
+        path: 'customer-service/chat',
+        component: () => import('@/views/Seller/SellerMessages.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
     ],
   },  
   {

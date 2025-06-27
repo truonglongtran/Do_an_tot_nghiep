@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Seller\ProductController as SellerProductController
 use App\Http\Controllers\Api\Seller\CategoryController as SellerCategoryController;
 use App\Http\Controllers\Api\Seller\ReviewController as SellerReviewController;
 use App\Http\Controllers\Api\Seller\ShopController as SellerShopController;
+use App\Http\Controllers\Api\Seller\MessageController as SellerMessageController;
 use App\Http\Controllers\Api\Buyer\HomeController;
 use App\Http\Controllers\Api\Buyer\SearchController;
 use App\Http\Controllers\Api\Buyer\CartController;
@@ -169,12 +170,18 @@ Route::prefix('seller')->group(function () {
         Route::post('/shop/decoration/banners', [SellerShopController::class, 'storeBanner']);
         Route::put('/shop/decoration/banners/{id}', [SellerShopController::class, 'updateBanner']);
         Route::delete('/shop/decoration/banners/{id}', [SellerShopController::class, 'deleteBanner']);
+        Route::get('/messages', [SellerMessageController::class, 'index']);
+        Route::get('/messages/detail', [SellerMessageController::class, 'show']); // Sử dụng query parameter ?buyer_id
+        Route::post('/messages/send', [SellerMessageController::class, 'send']);
+        Route::put('/messages/{buyerId}/read', [SellerMessageController::class, 'markAsRead']);
+        //  Route::get('/buyers', [SellerMessageController::class, 'getBuyers']);
+
     });
 });
 
 Route::prefix('buyer')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/register', [AuthController::class, 'register']);
+    // Route::post('/register', [AuthController::class, 'register']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
     // Public routes
@@ -231,5 +238,11 @@ Route::prefix('buyer')->group(function () {
         Route::put('/addresses/{id}/set-default', [AddressController::class, 'setDefault']);
 
         Route::get('/loyalty-points', [LoyaltyPointController::class, 'index']);
+
+        Route::get('/chats', [MessageController::class, 'index']);
+        Route::get('/chats/detail', [MessageController::class, 'show']);
+        Route::post('/chats/send', [MessageController::class, 'send']);
+        Route::put('/chats/{sellerId}/read', [MessageController::class, 'markAsRead']);
+        Route::get('/sellers', [MessageController::class, 'getSellers']);
     });
 });

@@ -2,25 +2,33 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Message extends Model
 {
-    protected $fillable = ['sender_id', 'receiver_id', 'content', 'is_read'];
+    use HasFactory;
 
-    /**
-     * Get the sender of the message.
-     */
-    public function sender()
+    protected $fillable = [
+        'buyer_id',
+        'seller_id',
+        'messages',
+        'last_message_at',
+        'unread_count',
+    ];
+
+    protected $casts = [
+        'messages' => 'array', // Ép kiểu cột messages thành mảng
+        'last_message_at' => 'datetime',
+    ];
+
+    public function buyer()
     {
-        return $this->belongsTo(User::class, 'sender_id');
+        return $this->belongsTo(User::class, 'buyer_id');
     }
 
-    /**
-     * Get the receiver of the message.
-     */
-    public function receiver()
+    public function seller()
     {
-        return $this->belongsTo(User::class, 'receiver_id');
+        return $this->belongsTo(User::class, 'seller_id');
     }
 }
