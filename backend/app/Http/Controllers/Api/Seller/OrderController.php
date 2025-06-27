@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api\Seller;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Report;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class OrderController extends Controller
 {
@@ -96,4 +100,152 @@ class OrderController extends Controller
             ], 404);
         }
     }
+    public function revenue(Request $request)
+    {
+        try {
+            $sellerId = $request->user()->id;
+            $filter = $request->input('filter', 'daily');
+
+            $query = Order::where('seller_id', $sellerId)
+                ->where('settled_status', 'settled');
+
+            if ($filter === 'daily') {
+                $query->whereDate('settled_at', Carbon::today());
+            } elseif ($filter === 'weekly') {
+                $query->whereBetween('settled_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]);
+            } elseif ($filter === 'monthly') {
+                $query->whereMonth('settled_at', Carbon::now()->month)
+                      ->whereYear('settled_at', Carbon::now()->year);
+            }
+
+            $totalRevenue = $query->sum('total');
+            $totalOrders = $query->count();
+
+            $topProduct = OrderItem::join('orders', 'order_items.order_id', '=', 'orders.id')
+                ->join('products', 'order_items.product_id', '=', 'products.id')
+                ->where('orders.seller_id', $sellerId)
+                ->where('orders.settled_status', 'settled')
+                ->groupBy('products.id', 'products.name')
+                ->select('products.id', 'products.name', \DB::raw('SUM(order_items.quantity) as total_sold'))
+                ->orderByDesc('total_sold')
+                ->first();
+
+            $orders = $query->with([
+                'buyer:id,email',
+                'items.product:id,name',
+                'items.productVariant:id,price',
+                'items.productVariant.variantAttributes.attribute:id,name',
+                'items.productVariant.variantAttributes.attributeValue:id,value'
+            ])->get();
+
+            Log::info('Revenue fetched', [
+                'seller_id' => $sellerId,
+                'filter' => $filter,
+                'total_revenue' => $totalRevenue,
+                'total_orders' => $totalOrders,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_revenue' => $totalRevenue,
+                    'total_orders' => $totalOrders,
+                    'top_product' => $topProduct ? [
+                        'id' => $topProduct->id,
+                        'name' => $topProduct->name,
+                        'total_sold' => (int)$topProduct->total_sold
+                    ] : null,
+                    'orders' => $orders,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching revenue', [
+                'seller_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy dữ liệu doanh thu: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function exportReport(Request $request)
+    {
+        try {
+            $sellerId = $request->user()->id;
+            $filter = $request->input('filter', 'daily');
+
+            $query = Order::where('seller_id', $sellerId)
+                ->where('settled_status', 'settled');
+
+            if ($filter === 'daily') {
+                $query->whereDate('settled_at', Carbon::today());
+            } elseif ($filter === 'weekly') {
+                $query->whereBetween('settled_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]);
+            } elseif ($filter === 'monthly') {
+                $query->whereMonth('settled_at', Carbon::now()->month)
+                      ->whereYear('settled_at', Carbon::now()->year);
+            }
+
+            $orders = $query->with(['items.product', 'items.productVariant'])->get();
+
+            // Tạo thư mục reports nếu chưa tồn tại
+            $directory = storage_path('app/public/reports');
+            if (!file_exists($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            $filename = 'reports/revenue_' . $filter . '_' . Carbon::now()->timestamp . '.csv';
+            $filePath = storage_path('app/public/' . $filename);
+            $file = fopen($filePath, 'w');
+            if ($file === false) {
+                throw new \Exception('Không thể mở file để ghi: ' . $filePath);
+            }
+
+            fputcsv($file, ['Order ID', 'Date', 'Total', 'Items']);
+
+            foreach ($orders as $order) {
+                $items = $order->items->map(function ($item) {
+                    return $item->product->name . ' (' . $item->quantity . ')';
+                })->implode(', ');
+                fputcsv($file, [
+                    $order->id,
+                    $order->settled_at->toDateTimeString(),
+                    $order->total,
+                    $items,
+                ]);
+            }
+            fclose($file);
+
+            $report = Report::create([
+                'report_type' => $filter,
+                'file_url' => Storage::url($filename),
+                'created_at' => Carbon::now(),
+            ]);
+
+            Log::info('Report exported', [
+                'seller_id' => $sellerId,
+                'report_id' => $report->id,
+                'file_url' => $report->file_url,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'file_url' => $report->file_url,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error exporting report', [
+                'seller_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi xuất báo cáo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    
 }

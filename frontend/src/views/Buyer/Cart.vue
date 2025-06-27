@@ -301,16 +301,32 @@ export default {
     },
     async checkout(event) {
       event.preventDefault();
-      const selectedCartIds = Object.keys(this.selectedItems).filter(cartId => this.selectedItems[cartId]);
+      const selectedCartIds = Object.keys(this.selectedItems)
+        .filter(cartId => this.selectedItems[cartId])
+        .map(Number);
       if (selectedCartIds.length === 0) {
         this.error = 'Vui lòng chọn ít nhất một sản phẩm để thanh toán';
         return;
       }
+
+      // Group selected cart IDs by shop
+      const cartsByShop = this.selectedCarts.reduce((acc, cart) => {
+        const shopId = cart.product_variant?.product?.shop?.id || 'unknown';
+        if (!acc[shopId]) {
+          acc[shopId] = {
+            owner_id: cart.product_variant?.product?.shop?.owner_id,
+            cart_ids: [],
+          };
+        }
+        acc[shopId].cart_ids.push(cart.id);
+        return acc;
+      }, {});
+
       try {
-        console.log('Navigating to order create with cart IDs:', selectedCartIds);
+        console.log('Navigating to order create with carts by shop:', cartsByShop);
         this.$router.push({
           path: '/orders/create',
-          query: { cartIds: selectedCartIds.join(',') },
+          query: { cartsByShop: JSON.stringify(cartsByShop) },
         });
       } catch (error) {
         console.error('Error during checkout navigation:', error.message);

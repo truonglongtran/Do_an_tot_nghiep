@@ -2,33 +2,40 @@
 <template>
   <div class="container mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold text-orange-500 mb-4">Đơn hàng</h1>
-    <div v-if="orders.length === 0" class="text-center text-gray-600">
+    <div v-if="loading" class="text-center">
+      <svg class="animate-spin w-8 h-8 mx-auto text-orange-500" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+      </svg>
+    </div>
+    <div v-else-if="error" class="text-red-500 text-center mb-6">
+      {{ error }}
+    </div>
+    <div v-else-if="filteredOrders.length === 0" class="text-center text-gray-600">
       Không có đơn hàng
     </div>
     <div v-else class="space-y-4">
-      <div v-for="order in orders" :key="order.id" class="border rounded-lg p-4">
+      <div v-for="order in filteredOrders" :key="order.id" class="border rounded-lg p-4">
         <p class="font-semibold">Đơn hàng #{{ order.id }}</p>
         <p class="text-gray-600">Trạng thái: {{ order.order_status }}</p>
         <p class="text-gray-600">Vận chuyển: {{ order.shipping_status }}</p>
+        <p class="text-gray-600">Tổng tiền: {{ formatPrice(order.total) }}</p>
         <p v-if="order.voucher" class="text-gray-600">Mã giảm giá: {{ order.voucher.code }}</p>
         <div class="mt-2">
           <p class="text-gray-600 font-semibold">Sản phẩm:</p>
           <div v-for="item in order.items" :key="item.id" class="flex items-center space-x-2 mt-1">
             <img
-              :src="item.product_variant?.image_url || 'https://via.placeholder.com/50'"
-              :alt="item.product.name"
+              :src="item.product_variant?.image_url || item.product?.image_url || 'https://via.placeholder.com/50'"
+              :alt="item.product?.name || 'Sản phẩm'"
               class="w-12 h-12 object-cover rounded"
             />
             <div>
-              <p class="text-gray-600">{{ item.product.name }}</p>
-              <p class="text-orange-500">{{ item.product_variant?.price }}đ x {{ item.quantity }}</p>
+              <p class="text-gray-600">{{ item.product?.name || 'Sản phẩm' }}</p>
+              <p class="text-orange-500">{{ formatPrice(item.product_variant?.price || item.product?.price || 0) }} x {{ item.quantity }}</p>
             </div>
           </div>
         </div>
         <p class="text-gray-500 text-sm mt-2">{{ formatDate(order.created_at) }}</p>
-        <router-link :to="'/orders/' + order.id" class="text-orange-500 hover:underline">
-          Xem chi tiết
-        </router-link>
       </div>
     </div>
   </div>
@@ -36,34 +43,67 @@
 
 <script>
 import axios from 'axios';
-import moment from 'moment';
 
 export default {
   name: 'Orders',
   data() {
     return {
       orders: [],
+      loading: true,
+      error: null,
     };
+  },
+  computed: {
+    filteredOrders() {
+      const orderId = this.$route.query.id;
+      if (orderId) {
+        return this.orders.filter(order => order.id == orderId);
+      }
+      return this.orders;
+    },
   },
   async created() {
     await this.fetchOrders();
   },
   methods: {
     async fetchOrders() {
+      this.loading = true;
+      this.error = null;
       try {
-        const response = await axios.get('/api/buyer/orders');
-        this.orders = response.data.orders;
+        const orderId = this.$route.query.id;
+        const endpoint = orderId ? `/buyer/orders/${orderId}` : '/buyer/orders';
+        const response = await axios.get(endpoint, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        this.orders = orderId ? [response.data.order] : response.data.orders || [];
       } catch (error) {
-        console.error('Error fetching orders:', error);
+        this.error = error.response?.data?.message || 'Lỗi tải đơn hàng.';
+        console.error('Error fetching orders:', error.response?.data || error);
+      } finally {
+        this.loading = false;
       }
     },
+    formatPrice(price) {
+      return price != null
+        ? Number(price).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })
+        : 'N/A';
+    },
     formatDate(date) {
-      return moment(date).format('DD/MM/YYYY HH:mm');
+      const d = new Date(date);
+      const formatter = new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      return formatter.format(d).replace(',', '');
     },
   },
 };
 </script>
 
 <style scoped>
-/* Không cần style vì Tailwind CSS đã xử lý */
+/* Tailwind handles most styling */
 </style>

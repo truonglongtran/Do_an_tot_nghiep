@@ -1,6 +1,6 @@
 <?php
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Admin\ShopController as AdminShopController;
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Admin\ProductController as AdminProductController;
@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Seller\ShippingPartnerController as SellerShippingP
 use App\Http\Controllers\Api\Seller\ProductController as SellerProductController;
 use App\Http\Controllers\Api\Seller\CategoryController as SellerCategoryController;
 use App\Http\Controllers\Api\Seller\ReviewController as SellerReviewController;
+use App\Http\Controllers\Api\Seller\ShopController as SellerShopController;
 use App\Http\Controllers\Api\Buyer\HomeController;
 use App\Http\Controllers\Api\Buyer\SearchController;
 use App\Http\Controllers\Api\Buyer\CartController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\Api\Buyer\LoyaltyPointController;
 use App\Http\Controllers\Api\Buyer\BannerController;
 use App\Http\Controllers\Api\Buyer\ShippingMethodController;
 use App\Http\Controllers\Api\Buyer\VoucherController;
+use App\Http\Controllers\Api\Buyer\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -57,12 +59,12 @@ Route::prefix('admin')->group(function () {
         });
 
         // User management
-        Route::get('/users', [UserController::class, 'index'])->name('users.index');
-        Route::post('/users', [UserController::class, 'store'])->name('users.store');
-        Route::get('/users/{id}', [UserController::class, 'show'])->name('users.show');
-        Route::put('/users/{id}', [UserController::class, 'update'])->name('users.update');
-        Route::delete('/users/{id}', [UserController::class, 'destroy'])->name('users.destroy');
-        Route::put('/users/{id}/status', [UserController::class, 'updateStatus'])->name('users.updateStatus');
+        Route::get('/users', [AdminUserController::class, 'index'])->name('users.index');
+        Route::post('/users', [AdminUserController::class, 'store'])->name('users.store');
+        Route::get('/users/{id}', [AdminUserController::class, 'show'])->name('users.show');
+        Route::put('/users/{id}', [AdminUserController::class, 'update'])->name('users.update');
+        Route::delete('/users/{id}', [AdminUserController::class, 'destroy'])->name('users.destroy');
+        Route::put('/users/{id}/status', [AdminUserController::class, 'updateStatus'])->name('users.updateStatus');
 
         // Shop management
         Route::get('/shops', [AdminShopController::class, 'index'])->name('shops.index');
@@ -142,8 +144,10 @@ Route::prefix('seller')->group(function () {
 
     Route::middleware(['auth:sanctum', 'role:seller'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/orders/revenue', [SellerOrderController::class, 'revenue']);
+        Route::get('/orders/export-report', [SellerOrderController::class, 'exportReport']);
         Route::get('/orders', [SellerOrderController::class, 'index']);
-        Route::get('/orders/{id}', [SellerOrderController::class, 'show']);
+        Route::get('/orders/{id}', [SellerOrderController::class, 'show'])->where('id', '[0-9]+');
         Route::get('/shipping-partners', [SellerShippingPartnerController::class, 'index']);
         Route::post('/shipping-partners/toggle', [SellerShippingPartnerController::class, 'toggle']);
         Route::get('/products', [SellerProductController::class, 'index']);
@@ -156,6 +160,15 @@ Route::prefix('seller')->group(function () {
         Route::get('categories/{categoryId}/attributes', [SellerCategoryController::class, 'attributes']);
         Route::get('/reviews', [SellerReviewController::class, 'showReviews'])->name('seller.reviews.index');
         Route::patch('/reviews/{id}/hide', [SellerReviewController::class, 'hide'])->name('seller.reviews.hide');
+        Route::get('/shop/profile', [SellerShopController::class, 'profile']);
+        Route::post('/shop/profile', [SellerShopController::class, 'updateProfile']);
+        Route::get('/shop/settings', [SellerShopController::class, 'settings']);
+        Route::post('/shop/settings', [SellerShopController::class, 'updateSettings']);
+        // Trong routes/api.php, nhóm middleware auth:sanctum, role:seller
+        Route::get('/shop/decoration', [SellerShopController::class, 'decoration']);
+        Route::post('/shop/decoration/banners', [SellerShopController::class, 'storeBanner']);
+        Route::put('/shop/decoration/banners/{id}', [SellerShopController::class, 'updateBanner']);
+        Route::delete('/shop/decoration/banners/{id}', [SellerShopController::class, 'deleteBanner']);
     });
 });
 
@@ -173,6 +186,9 @@ Route::prefix('buyer')->group(function () {
     Route::get('/shops/{id}', [ShopController::class, 'show']);
 
     Route::middleware(['auth:sanctum', 'role:buyer'])->group(function () {
+        Route::get('/user', [UserController::class, 'getUser']);
+        Route::post('/user/update', [UserController::class, 'updateUser']);
+        
         Route::get('/search-history', [SearchController::class, 'history']);
         Route::delete('/search-history/{id}', [SearchController::class, 'deleteSearchHistory']);
         Route::delete('/search-history-delete', [SearchController::class, 'clearSearchHistory']);
@@ -196,6 +212,7 @@ Route::prefix('buyer')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::get('/orders/{id}', [OrderController::class, 'show']);
         Route::post('/orders/create', [OrderController::class, 'create']);
+        Route::post('/orders/bulk-create', [OrderController::class, 'bulkCreate']);
 
         Route::get('/reviews', [ReviewController::class, 'index']);
         Route::post('/reviews', [ReviewController::class, 'store']);

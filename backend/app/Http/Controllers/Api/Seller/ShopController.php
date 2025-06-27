@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Api\Seller;
 
 use App\Http\Controllers\Controller;
@@ -8,6 +9,9 @@ use App\Models\Review;
 use App\Models\ShippingPartner;
 use App\Models\ShopShippingPartner;
 use App\Models\User;
+use App\Models\Banner;
+use App\Models\BannerDisplayLocation;
+use App\Models\BannerPlacement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -138,60 +142,61 @@ class ShopController extends Controller
     }
 
     public function settings(Request $request)
-    {
-        try {
-            $sellerId = $request->user()->id;
-            $shop = Shop::where('owner_id', $sellerId)
-                ->with(['owner:id,email'])
-                ->first();
+{
+    try {
+        $sellerId = $request->user()->id;
+        $shop = Shop::where('owner_id', $sellerId)
+            ->with(['owner:id,email'])
+            ->first();
 
-            if (!$shop) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Không tìm thấy shop',
-                ], 404);
-            }
-
-            $shippingPartners = ShippingPartner::all()->map(function ($partner) use ($shop) {
-                $isActive = ShopShippingPartner::where('shop_id', $shop->id)
-                    ->where('shipping_partner_id', $partner->id)
-                    ->exists();
-                return [
-                    'id' => $partner->id,
-                    'name' => $partner->name,
-                    'is_active' => $isActive,
-                ];
-            });
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'contact' => [
-                        'email' => $shop->owner->email,
-                        'phone_number' => $shop->phone_number,
-                    ],
-                    'address' => [
-                        'pickup_address' => $shop->pickup_address,
-                        'ward' => $shop->ward,
-                        'district' => $shop->district,
-                        'city' => $shop->city,
-                    ],
-                    'shipping' => [
-                        'partners' => $shippingPartners,
-                    ],
-                ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error fetching shop settings', [
-                'seller_id' => $request->user()->id,
-                'error' => $e->getMessage(),
-            ]);
+        if (!$shop) {
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi khi lấy thiết lập shop',
-            ], 500);
+                'message' => 'Không tìm thấy shop',
+            ], 404);
         }
+
+        $shippingPartners = ShippingPartner::all()->map(function ($partner) use ($shop) {
+            $isActive = ShopShippingPartner::where('shop_id', $shop->id)
+                ->where('shipping_partner_id', $partner->id)
+                ->exists();
+            return [
+                'id' => $partner->id,
+                'name' => $partner->name,
+                'is_active' => $isActive,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'contact' => [
+                    'email' => $shop->owner->email,
+                    'phone_number' => $shop->phone_number,
+                ],
+                'address' => [
+                    'pickup_address' => $shop->pickup_address,
+                    'ward' => $shop->ward,
+                    'district' => $shop->district,
+                    'city' => $shop->city,
+                ],
+                'shipping' => [
+                    'partners' => $shippingPartners,
+                ],
+            ],
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching shop settings', [
+            'seller_id' => $request->user()->id,
+            'error' => $e->getMessage(),
+        ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Lỗi khi lấy thiết lập shop',
+        ], 500);
     }
+}
+
 
     public function updateSettings(Request $request)
     {
@@ -263,6 +268,201 @@ class ShopController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi khi cập nhật thiết lập shop',
+            ], 500);
+        }
+    }
+
+    public function decoration(Request $request)
+    {
+        try {
+            $sellerId = $request->user()->id;
+            $shop = Shop::where('owner_id', $sellerId)->firstOrFail();
+            $banners = Banner::whereHas('placements', function ($query) use ($shop) {
+                $query->where('shop_id', $shop->id);
+            })
+                ->with(['placements.location'])
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'banners' => $banners,
+                    'locations' => BannerDisplayLocation::where('location_type', 'shop')->get(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching shop decoration', [
+                'seller_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy dữ liệu trang trí shop: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function storeBanner(Request $request)
+    {
+        try {
+            $sellerId = $request->user()->id;
+            $shop = Shop::where('owner_id', $sellerId)->firstOrFail();
+
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'image' => 'required|image|mimes:jpg,png,jpeg|max:2048',
+                'link' => 'nullable|url',
+                'status' => 'required|in:active,inactive',
+                'location_id' => [
+                    'required',
+                    'exists:banner_display_locations,id',
+                    function ($attribute, $value, $fail) {
+                        $location = BannerDisplayLocation::find($value);
+                        if ($location && $location->location_type !== 'shop') {
+                            $fail('Vị trí này chỉ dành cho banner chung của nền tảng.');
+                        }
+                    },
+                ],
+                'position' => 'required|integer|min:1',
+            ]);
+
+            $imagePath = $request->file('image')->store('banners', 'public');
+            $banner = Banner::create([
+                'title' => $validated['title'],
+                'img_url' => Storage::url($imagePath),
+                'link_url' => $validated['link'],
+                'start_date' => now(),
+                'end_date' => now()->addDays(30),
+            ]);
+
+            BannerPlacement::create([
+                'banner_id' => $banner->id,
+                'location_id' => $validated['location_id'],
+                'shop_id' => $shop->id,
+                'display_order' => $validated['position'],
+                'is_active' => $validated['status'] === 'active',
+            ]);
+
+            Log::info('Banner created', [
+                'seller_id' => $sellerId,
+                'banner_id' => $banner->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $banner,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error creating banner', [
+                'seller_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi tạo banner: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateBanner(Request $request, $id)
+    {
+        try {
+            $sellerId = $request->user()->id;
+            $shop = Shop::where('owner_id', $sellerId)->firstOrFail();
+            $banner = Banner::whereHas('placements', function ($query) use ($shop) {
+                $query->where('shop_id', $shop->id);
+            })->findOrFail($id);
+
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'image' => 'nullable|image|mimes:jpg,png,jpeg|max:2048',
+                'link' => 'nullable|url',
+                'status' => 'required|in:active,inactive',
+                'location_id' => [
+                    'required',
+                    'exists:banner_display_locations,id',
+                    function ($attribute, $value, $fail) {
+                        $location = BannerDisplayLocation::find($value);
+                        if ($location && $location->location_type !== 'shop') {
+                            $fail('Vị trí này chỉ dành cho banner chung của nền tảng.');
+                        }
+                    },
+                ],
+                'position' => 'required|integer|min:1',
+            ]);
+
+            if ($request->hasFile('image')) {
+                if ($banner->img_url) {
+                    Storage::disk('public')->delete(str_replace('/storage/', '', $banner->img_url));
+                }
+                $imagePath = $request->file('image')->store('banners', 'public');
+                $validated['img_url'] = Storage::url($imagePath);
+            }
+
+            $banner->update($validated);
+            $banner->placements()->updateOrCreate(
+                ['banner_id' => $banner->id, 'shop_id' => $shop->id],
+                [
+                    'location_id' => $validated['location_id'],
+                    'shop_id' => $shop->id,
+                    'display_order' => $validated['position'],
+                    'is_active' => $validated['status'] === 'active',
+                ]
+            );
+
+            Log::info('Banner updated', [
+                'seller_id' => $sellerId,
+                'banner_id' => $banner->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $banner,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error updating banner', [
+                'seller_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi cập nhật banner: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function deleteBanner(Request $request, $id)
+    {
+        try {
+            $sellerId = $request->user()->id;
+            $shop = Shop::where('owner_id', $sellerId)->firstOrFail();
+            $banner = Banner::whereHas('placements', function ($query) use ($shop) {
+                $query->where('shop_id', $shop->id);
+            })->findOrFail($id);
+
+            if ($banner->img_url) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $banner->img_url));
+            }
+            $banner->placements()->where('shop_id', $shop->id)->delete();
+            $banner->delete();
+
+            Log::info('Banner deleted', [
+                'seller_id' => $sellerId,
+                'banner_id' => $id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Xóa banner thành công',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error deleting banner', [
+                'seller_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi xóa banner: ' . $e->getMessage(),
             ], 500);
         }
     }

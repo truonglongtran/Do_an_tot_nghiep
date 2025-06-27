@@ -35,7 +35,7 @@ export default {
   methods: {
     async fetchPoints() {
       try {
-        const response = await axios.get('/api/buyer/loyalty-points');
+        const response = await axios.get('/buyer/loyalty-points');
         this.totalPoints = response.data.total_points;
         this.transactions = response.data.transactions;
       } catch (error) {

@@ -65,11 +65,7 @@
       <!-- Right Section -->
       <div class="flex items-center space-x-4">
         <!-- Cart -->
-        <div
-          class="relative group"
-          @mouseenter="openCart"
-          @mouseleave="closeCart"
-        >
+        <div class="relative group" @mouseenter="openCart" @mouseleave="closeCart">
           <router-link to="/cart" class="text-gray-600 hover:text-orange-500">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -118,11 +114,7 @@
         </div>
 
         <!-- Notifications -->
-        <div
-          class="relative group"
-          @mouseenter="openNotification"
-          @mouseleave="closeNotification"
-        >
+        <div class="relative group" @mouseenter="openNotification" @mouseleave="closeNotification">
           <router-link to="/buyer/notifications" class="text-gray-600 hover:text-orange-500">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -168,16 +160,31 @@
         <a href="/seller" class="text-gray-600 hover:text-orange-500">Seller Channel</a>
 
         <!-- User Section (Logged In) -->
-        <div v-if="isLoggedInComputed" class="flex items-center space-x-2">
-          <img
-            :src="user.avatar_url || 'https://via.placeholder.com/50'"
-            alt="Avatar"
-            class="w-8 h-8 rounded-full"
-          />
-          <span class="text-gray-600 truncate max-w-[150px]">{{ user.username || 'User' }}</span>
-          <button @click="logout" class="text-red-500 hover:text-orange-500">
-            Logout
-          </button>
+        <div v-if="isLoggedInComputed" class="relative group" @mouseenter="openUserMenu" @mouseleave="closeUserMenu">
+          <div class="flex items-center space-x-2 cursor-pointer">
+            <img
+              :src="user.avatar_url || 'https://via.placeholder.com/50'"
+              alt="Avatar"
+              class="w-8 h-8 rounded-full"
+            />
+            <span class="text-gray-600 truncate max-w-[150px]">{{ user.username || 'User' }}</span>
+          </div>
+          <div
+            v-show="isUserMenuOpen"
+            class="absolute right-0 mt-3 w-48 bg-white border rounded-lg shadow-lg p-2 z-[60] popup-with-arrow"
+            @mouseenter="openUserMenu"
+            @mouseleave="closeUserMenu"
+          >
+            <router-link to="/buyer/profile" class="block px-4 py-2 text-gray-600 hover:bg-gray-100 hover:text-orange-500">
+              Profile
+            </router-link>
+            <router-link to="/buyer/order-tracking" class="block px-4 py-2 text-gray-600 hover:bg-gray-100 hover:text-orange-500">
+              Theo dõi đơn
+            </router-link>
+            <button @click="logout" class="block w-full text-left px-4 py-2 text-red-500 hover:bg-gray-100 hover:text-orange-500">
+              Logout
+            </button>
+          </div>
         </div>
 
         <!-- Non-logged-in Section -->
@@ -221,6 +228,7 @@ export default {
       carts: [],
       isNotificationOpen: false,
       isCartOpen: false,
+      isUserMenuOpen: false,
       closeTimeout: null,
     };
   },
@@ -415,12 +423,22 @@ export default {
         this.isNotificationOpen = false;
       }, 300);
     },
+    openUserMenu() {
+      if (this.closeTimeout) {
+        clearTimeout(this.closeTimeout);
+      }
+      this.isUserMenuOpen = true;
+    },
+    closeUserMenu() {
+      this.closeTimeout = setTimeout(() => {
+        this.isUserMenuOpen = false;
+      }, 300);
+    },
   },
 };
 </script>
 
 <style scoped>
-/* Tailwind handles styling */
 .group {
   position: relative;
 }
@@ -432,16 +450,14 @@ export default {
   left: -10px;
   right: -10px;
   bottom: -10px;
-  z-highlightsindex: 50;
+  z-index: 50;
   pointer-events: none;
 }
 
-/* Đảm bảo popup không bị che */
 .group > div {
   pointer-events: auto;
 }
 
-/* Tạo tam giác nhọn cho popup */
 .popup-with-arrow::before {
   content: '';
   position: absolute;
@@ -455,7 +471,6 @@ export default {
   z-index: 61;
 }
 
-/* Viền tam giác khớp với popup */
 .popup-with-arrow::after {
   content: '';
   position: absolute;
@@ -469,7 +484,6 @@ export default {
   z-index: 60;
 }
 
-/* Tùy chỉnh thanh cuộn */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }

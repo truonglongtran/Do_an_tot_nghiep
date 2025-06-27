@@ -36,7 +36,7 @@ export default {
   methods: {
     async fetchReviews() {
       try {
-        const response = await axios.get('/api/buyer/reviews');
+        const response = await axios.get('/buyer/reviews');
         this.reviews = response.data.reviews;
       } catch (error) {
         console.error('Error fetching reviews:', error);

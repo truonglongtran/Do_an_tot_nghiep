@@ -275,16 +275,43 @@ const routes = [
         },
       },
       {
-        path: '/shop/profile',
-        name: 'SellerShopProfile',
-        component: () => import('@/views/Seller/SellerShopProfile.vue'),
-        meta: { requiresAuth: true, role: 'seller' },
+        path: 'finance/revenue',
+        name: 'SellerFinanceRevenue',
+        component: () => import('@/views/Seller/SellerRevenue.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view'] },
+        },
       },
       {
-        path: '/shop/settings',
+        path: 'shop/profile',
+        name: 'SellerShopProfile',
+        component: () => import('@/views/Seller/SellerShopProfile.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'shop/settings',
         name: 'SellerShopSettings',
         component: () => import('@/views/Seller/SellerShopSettings.vue'),
-        meta: { requiresAuth: true, role: 'seller' },
+        meta: {
+          requiresAuth: true,
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'shop/decoration',
+        name: 'SellerShopDecoration',
+        component: () => import('@/views/Seller/SellerShopDecoration.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
       },
     ],
   },  
@@ -347,7 +374,7 @@ const routes = [
         meta: { requiresAuth: false },
       },
       {
-        path: 'orders',
+        path: 'buyer/orders',
         name: 'Orders',
         component: () => import('@/views/Buyer/Orders.vue'),
         meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
@@ -356,6 +383,24 @@ const routes = [
         path: 'orders/create',
         name: 'OrderCreate',
         component: () => import('@/views/Buyer/OrderCreate.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/order-success',
+        name: 'OrderSuccess',
+        component: () => import('@/views/Buyer/OrderSuccess.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      { 
+        path: 'buyer/profile',
+        name: 'ProfileEdit', 
+        component: () => import('@/views/Buyer/ProfileEdit.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      { 
+        path: '/buyer/order-tracking',
+        name: 'OrderTracking',
+        component: () => import('@/views/Buyer/OrderTracking.vue'),
         meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
       },
       {

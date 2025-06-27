@@ -15,74 +15,84 @@ use Illuminate\Support\Facades\Auth;
 
 class OrderController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
-        $user = $request->user();
-        $orders = Order::where('buyer_id', $user->id)
-            ->with([
-                'items' => function ($q) {
-                    $q->with([
-                        'product' => function ($q) {
-                            $q->select('id', 'shop_id', 'name');
-                        },
-                        'product.shop' => function ($q) {
-                            $q->select('id', 'shop_name', 'owner_id');
-                        },
-                        'productVariant' => function ($q) {
-                            $q->select('id', 'product_id', 'price', 'image_url');
-                        }
-                    ]);
-                },
-                'shippingPartner' => function ($q) {
-                    $q->select('id', 'name');
-                },
-                'voucher' => function ($q) {
-                    $q->select('id', 'code', 'discount_type', 'discount_value');
-                },
-                'shippingVoucher' => function ($q) {
-                    $q->select('id', 'code', 'discount_type', 'discount_value');
-                }
-            ])
-            ->select('id', 'seller_id', 'shipping_partner_id', 'voucher_id', 'shipping_voucher_id', 'order_status', 'shipping_status', 'created_at')
-            ->orderBy('created_at', 'desc')
-            ->take(20)
-            ->get();
-
-        return response()->json(['orders' => $orders]);
+        try {
+            $orders = Order::where('buyer_id', Auth::id())
+                ->with(['items.product', 'items.productVariant'])
+                ->get()
+                ->map(function ($order) {
+                    return [
+                        'id' => $order->id,
+                        'order_status' => $order->order_status,
+                        'shipping_status' => $order->shipping_status,
+                        'total' => $order->total, // Đảm bảo trường total được trả về
+                        'created_at' => $order->created_at,
+                        'items' => $order->items->map(function ($item) {
+                            return [
+                                'id' => $item->id,
+                                'product_id' => $item->product_id,
+                                'product_variant_id' => $item->product_variant_id,
+                                'quantity' => $item->quantity,
+                                'product' => $item->product ? [
+                                    'name' => $item->product->name,
+                                    'image_url' => $item->product->image_url,
+                                ] : null,
+                                'product_variant' => $item->productVariant ? [
+                                    'name' => $item->productVariant->name,
+                                    'price' => $item->productVariant->price,
+                                    'image_url' => $item->productVariant->image_url,
+                                ] : null,
+                            ];
+                        }),
+                    ];
+                });
+            return response()->json(['orders' => $orders], 200);
+        } catch (\Exception $e) {
+            \Log::error('Error in OrderController::index: ' . $e->getMessage());
+            return response()->json(['message' => 'Lỗi tải đơn hàng'], 500);
+        }
     }
 
-    public function show(Request $request, $id)
+    public function show($id)
     {
-        $user = $request->user();
-        $order = Order::where('id', $id)
-            ->where('buyer_id', $user->id)
-            ->with([
-                'items' => function ($q) {
-                    $q->with([
-                        'product' => function ($q) {
-                            $q->select('id', 'shop_id', 'name');
-                        },
-                        'product.shop' => function ($q) {
-                            $q->select('id', 'shop_name', 'owner_id');
-                        },
-                        'productVariant' => function ($q) {
-                            $q->select('id', 'product_id', 'price', 'image_url');
-                        }
-                    ]);
-                },
-                'shippingPartner' => function ($q) {
-                    $q->select('id', 'name');
-                },
-                'voucher' => function ($q) {
-                    $q->select('id', 'code', 'discount_type', 'discount_value');
-                },
-                'shippingVoucher' => function ($q) {
-                    $q->select('id', 'code', 'discount_type', 'discount_value');
-                }
-            ])
-            ->firstOrFail();
-
-        return response()->json(['order' => $order]);
+        try {
+            $order = Order::where('buyer_id', Auth::id())
+                ->with(['items.product', 'items.productVariant'])
+                ->findOrFail($id);
+            return response()->json([
+                'order' => [
+                    'id' => $order->id,
+                    'order_status' => $order->order_status,
+                    'shipping_status' => $order->shipping_status,
+                    'total' => $order->total, // Đảm bảo trường total được trả về
+                    'created_at' => $order->created_at,
+                    'items' => $order->items->map(function ($item) {
+                        return [
+                            'id' => $item->id,
+                            'product_id' => $item->product_id,
+                            'product_variant_id' => $item->product_variant_id,
+                            'quantity' => $item->quantity,
+                            'product' => $item->product ? [
+                                'name' => $item->product->name,
+                                'image_url' => $item->product->image_url,
+                            ] : null,
+                            'product_variant' => $item->productVariant ? [
+                                'name' => $item->productVariant->name,
+                                'price' => $item->productVariant->price,
+                                'image_url' => $item->productVariant->image_url,
+                            ] : null,
+                        ];
+                    }),
+                    'voucher' => $order->voucher ? [
+                        'code' => $order->voucher->code,
+                    ] : null,
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            \Log::error('Error in OrderController::show: ' . $e->getMessage());
+            return response()->json(['message' => 'Lỗi tải chi tiết đơn hàng'], 500);
+        }
     }
 
     public function create(Request $request)
@@ -197,6 +207,143 @@ class OrderController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Lỗi tạo đơn hàng: ' . $e->getMessage());
+            return response()->json(['error' => 'Lỗi khi tạo đơn hàng: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function bulkCreate(Request $request)
+    {
+        $request->validate([
+            '*.cart_ids' => 'required|array|min:1',
+            '*.cart_ids.*' => 'exists:carts,id',
+            '*.address_id' => 'required|exists:buyer_addresses,id',
+            '*.shipping_method_id' => 'required|exists:shipping_partners,id',
+            '*.payment_method' => 'required|in:COD',
+            '*.shipping_voucher_id' => 'nullable|exists:vouchers,id',
+            '*.product_voucher_id' => 'nullable|exists:vouchers,id',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $buyerId = auth()->id();
+            $ordersData = $request->all();
+            $createdOrders = [];
+
+            // Validate address belongs to the buyer
+            $addressIds = collect($ordersData)->pluck('address_id')->unique();
+            if ($addressIds->count() !== 1) {
+                return response()->json(['error' => 'Tất cả đơn hàng phải sử dụng cùng một địa chỉ.'], 400);
+            }
+            $address = BuyerAddress::where('id', $addressIds->first())
+                ->where('user_id', $buyerId)
+                ->first();
+            if (!$address) {
+                return response()->json(['error' => 'Địa chỉ không hợp lệ hoặc không thuộc về bạn.'], 400);
+            }
+
+            // Fetch all carts
+            $allCartIds = collect($ordersData)->pluck('cart_ids')->flatten()->unique();
+            $carts = Cart::whereIn('id', $allCartIds)
+                ->where('user_id', $buyerId)
+                ->with([
+                    'productVariant' => function ($q) {
+                        $q->select('id', 'product_id', 'price', 'image_url');
+                    },
+                    'productVariant.product' => function ($q) {
+                        $q->select('id', 'shop_id');
+                    },
+                    'productVariant.product.shop' => function ($q) {
+                        $q->select('id', 'owner_id');
+                    }
+                ])
+                ->get();
+
+            if ($carts->isEmpty()) {
+                return response()->json(['error' => 'Giỏ hàng không tồn tại hoặc không thuộc về bạn.'], 400);
+            }
+
+            foreach ($ordersData as $orderData) {
+                $cartIds = $orderData['cart_ids'];
+                $shopCarts = $carts->whereIn('id', $cartIds);
+
+                if ($shopCarts->isEmpty()) {
+                    return response()->json(['error' => 'Giỏ hàng không tồn tại cho một cửa hàng.'], 400);
+                }
+
+                $ownerIds = $shopCarts->pluck('productVariant.product.shop.owner_id')->unique();
+                if ($ownerIds->count() !== 1) {
+                    return response()->json(['error' => 'Tất cả sản phẩm trong một đơn hàng phải thuộc cùng một người bán.'], 400);
+                }
+                $sellerId = $ownerIds->first();
+
+                $order = new Order();
+                $order->buyer_id = $buyerId;
+                $order->seller_id = $sellerId;
+                $order->address_id = $orderData['address_id'];
+                $order->shipping_partner_id = $orderData['shipping_method_id'];
+                $order->payment_method = $orderData['payment_method'];
+
+                $totalPrice = $shopCarts->sum(function ($cart) {
+                    return $cart->productVariant->price * $cart->quantity;
+                });
+
+                $shippingMethod = ShippingPartner::findOrFail($orderData['shipping_method_id']);
+                $shop = Shop::where('owner_id', $sellerId)->first();
+                $shippingPrice = $shop ? 15000 : 15000; // Default price
+
+                $totalDiscount = 0;
+
+                if ($orderData['shipping_voucher_id']) {
+                    $voucher = Voucher::findOrFail($orderData['shipping_voucher_id']);
+                    if ($voucher->voucher_type === 'shipping') {
+                        $totalDiscount += $voucher->discount_type === 'fixed'
+                            ? min($shippingPrice, $voucher->discount_value)
+                            : ($shippingPrice * $voucher->discount_value) / 100;
+                        $order->shipping_voucher_id = $voucher->id;
+                    }
+                }
+
+                if ($orderData['product_voucher_id']) {
+                    $voucher = Voucher::findOrFail($orderData['product_voucher_id']);
+                    if (in_array($voucher->voucher_type, ['platform', 'shop', 'product'])) {
+                        $totalDiscount += $voucher->discount_type === 'fixed'
+                            ? $voucher->discount_value
+                            : ($totalPrice * $voucher->discount_value) / 100;
+                        $order->voucher_id = $voucher->id;
+                    }
+                }
+
+                $order->subtotal = $totalPrice;
+                $order->shipping_fee = $shippingPrice;
+                $order->total_discount = $totalDiscount;
+                $order->total = max(0, $totalPrice + $shippingPrice - $totalDiscount);
+                $order->order_status = 'pending';
+                $order->save();
+
+                foreach ($shopCarts as $cart) {
+                    $order->items()->create([
+                        'product_id' => $cart->productVariant->product_id,
+                        'product_variant_id' => $cart->product_variant_id,
+                        'quantity' => $cart->quantity,
+                        'price' => $cart->productVariant->price,
+                    ]);
+                }
+
+                $createdOrders[] = $order;
+            }
+
+            Cart::whereIn('id', $allCartIds)->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Các đơn hàng đã được tạo thành công.',
+                'orders' => $createdOrders,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Lỗi tạo nhiều đơn hàng: ' . $e->getMessage());
             return response()->json(['error' => 'Lỗi khi tạo đơn hàng: ' . $e->getMessage()], 500);
         }
     }
