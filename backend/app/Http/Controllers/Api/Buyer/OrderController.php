@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Api\Buyer;
 
 use App\Http\Controllers\Controller;
@@ -19,21 +20,32 @@ class OrderController extends Controller
     {
         try {
             $orders = Order::where('buyer_id', Auth::id())
-                ->with(['items.product', 'items.productVariant'])
+                ->with(['items.product', 'items.productVariant', 'reviews'])
                 ->get()
                 ->map(function ($order) {
                     return [
                         'id' => $order->id,
                         'order_status' => $order->order_status,
                         'shipping_status' => $order->shipping_status,
-                        'total' => $order->total, // Đảm bảo trường total được trả về
+                        'total' => $order->total,
                         'created_at' => $order->created_at,
+                        'reviews' => $order->reviews->map(function ($review) {
+                            return [
+                                'id' => $review->id,
+                                'product_id' => $review->product_id,
+                                'rating' => $review->rating,
+                                'comment' => $review->comment,
+                                'images' => $review->images ? json_decode($review->images, true) : [],
+                                'created_at' => $review->created_at->toDateTimeString(),
+                            ];
+                        }),
                         'items' => $order->items->map(function ($item) {
                             return [
                                 'id' => $item->id,
                                 'product_id' => $item->product_id,
                                 'product_variant_id' => $item->product_variant_id,
                                 'quantity' => $item->quantity,
+                                'is_reviewed' => $item->is_reviewed,
                                 'product' => $item->product ? [
                                     'name' => $item->product->name,
                                     'image_url' => $item->product->image_url,
@@ -57,22 +69,41 @@ class OrderController extends Controller
     public function show($id)
     {
         try {
+            if (!is_numeric($id)) {
+                return response()->json(['success' => false, 'message' => 'ID đơn hàng không hợp lệ'], 400);
+            }
             $order = Order::where('buyer_id', Auth::id())
-                ->with(['items.product', 'items.productVariant'])
-                ->findOrFail($id);
+                ->with(['items.product', 'items.productVariant', 'reviews'])
+                ->where('id', $id)
+                ->first();
+            if (!$order) {
+                return response()->json(['success' => false, 'message' => 'Đơn hàng không tồn tại hoặc không thuộc về bạn'], 404);
+            }
             return response()->json([
+                'success' => true,
                 'order' => [
                     'id' => $order->id,
                     'order_status' => $order->order_status,
                     'shipping_status' => $order->shipping_status,
-                    'total' => $order->total, // Đảm bảo trường total được trả về
+                    'total' => $order->total,
                     'created_at' => $order->created_at,
+                    'reviews' => $order->reviews->map(function ($review) {
+                        return [
+                            'id' => $review->id,
+                            'product_id' => $review->product_id,
+                            'rating' => $review->rating,
+                            'comment' => $review->comment,
+                            'images' => $review->images ? json_decode($review->images, true) : [],
+                            'created_at' => $review->created_at->toDateTimeString(),
+                        ];
+                    }),
                     'items' => $order->items->map(function ($item) {
                         return [
                             'id' => $item->id,
                             'product_id' => $item->product_id,
                             'product_variant_id' => $item->product_variant_id,
                             'quantity' => $item->quantity,
+                            'is_reviewed' => $item->is_reviewed,
                             'product' => $item->product ? [
                                 'name' => $item->product->name,
                                 'image_url' => $item->product->image_url,
@@ -90,8 +121,12 @@ class OrderController extends Controller
                 ]
             ], 200);
         } catch (\Exception $e) {
-            \Log::error('Error in OrderController::show: ' . $e->getMessage());
-            return response()->json(['message' => 'Lỗi tải chi tiết đơn hàng'], 500);
+            \Log::error('Error in OrderController::show: ' . $e->getMessage(), [
+                'order_id' => $id,
+                'buyer_id' => Auth::id() ?? 'unknown',
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Lỗi tải chi tiết đơn hàng'], 500);
         }
     }
 
@@ -196,6 +231,7 @@ class OrderController extends Controller
                     'product_variant_id' => $cart->product_variant_id,
                     'quantity' => $cart->quantity,
                     'price' => $cart->productVariant->price,
+                    'is_reviewed' => false,
                 ]);
             }
 
@@ -327,6 +363,7 @@ class OrderController extends Controller
                         'product_variant_id' => $cart->product_variant_id,
                         'quantity' => $cart->quantity,
                         'price' => $cart->productVariant->price,
+                        'is_reviewed' => false,
                     ]);
                 }
 

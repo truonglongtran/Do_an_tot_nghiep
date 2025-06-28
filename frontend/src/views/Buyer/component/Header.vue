@@ -98,12 +98,12 @@
                 @click="openChatModal(chat)"
               >
                 <img
-                  :src="chat.seller.avatar_url || 'https://via.placeholder.com/50'"
-                  :alt="chat.seller.username || 'Shop'"
+                  :src="chat.shop?.avatar_url || 'https://via.placeholder.com/50'"
+                  :alt="chat.shop?.shop_name || 'Shop'"
                   class="w-10 h-10 rounded-full object-cover"
                 />
                 <div class="flex-1">
-                  <p class="text-sm font-semibold truncate">{{ chat.seller.username || 'Shop' }}</p>
+                  <p class="text-sm font-semibold truncate">{{ chat.shop?.shop_name || 'Shop' }}</p>
                   <p class="text-gray-600 text-xs truncate">{{ chat.last_message?.content || 'Chưa có tin nhắn' }}</p>
                   <p class="text-gray-500 text-xs">{{ formatDate(chat.last_message?.created_at) }}</p>
                 </div>
@@ -262,35 +262,36 @@
       <div class="flex items-center justify-between p-3 border-b bg-orange-500 text-white rounded-t-lg">
         <div class="flex items-center space-x-2">
           <img
-            :src="selectedChat.seller?.avatar_url || 'https://via.placeholder.com/50'"
-            :alt="selectedChat.seller?.username || 'Shop'"
+            :src="selectedChat.shop?.avatar_url || 'https://via.placeholder.com/50'"
+            :alt="selectedChat.shop?.shop_name || 'Shop'"
             class="w-8 h-8 rounded-full object-cover"
           />
-          <span class="font-semibold truncate">{{ selectedChat.seller?.username || 'Shop' }}</span>
+          <span class="font-semibold truncate">{{ selectedChat.shop?.shop_name || 'Shop' }}</span>
         </div>
-        <button @click="setActiveModal(null)" class="text-white hover:text-gray-200">
+        <button @click="closeChatModal" class="text-white hover:text-gray-200">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
-      <div class="flex-1 p-3 overflow-y-auto custom-scrollbar">
-        <div v-for="message in selectedChat.messages" :key="message.created_at" class="mb-2">
+      <div class="flex-1 p-3 overflow-y-auto custom-scrollbar" ref="chatMessages">
+        <div v-for="message in selectedChat.messages" :key="message.created_at" class="mb-4">
           <div
             :class="{
               'flex justify-end': message.sender_type === 'buyer',
               'flex justify-start': message.sender_type === 'seller',
             }"
           >
-            <div
-              :class="{
-                'bg-orange-500 text-white': message.sender_type === 'buyer',
-                'bg-orange-100 text-gray-800': message.sender_type === 'seller',
-              }"
-              class="max-w-[70%] p-2 rounded-lg"
-            >
-              <p class="text-sm">{{ message.content }}</p>
-              <p class="text-xs text-gray-500">{{ formatDate(message.created_at) }}</p>
+            <div class="message-bubble">
+              <p
+                :class="{
+                  'sent': message.sender_type === 'buyer',
+                  'received': message.sender_type === 'seller',
+                }"
+              >
+                {{ message.content }}
+              </p>
+              <span class="message-time">{{ formatDate(message.created_at) }}</span>
             </div>
           </div>
         </div>
@@ -310,8 +311,9 @@
           <button
             @click="sendMessage"
             class="bg-orange-500 text-white p-2 rounded-lg hover:bg-orange-600"
-            :disabled="!newMessage.trim()"
+            :disabled="!newMessage.trim() || sending"
           >
+            <span v-if="sending" class="spinner"></span>
             Gửi
           </button>
         </div>
@@ -342,10 +344,12 @@ export default {
       notifications: [],
       carts: [],
       chats: [],
-      activeModal: null, // Controls which modal is open: 'notifications', 'cart', 'chats', 'chat', 'user', or null
-      selectedChat: { seller: {}, messages: [] },
+      activeModal: null,
+      selectedChat: { seller: {}, shop: {}, messages: [] },
       newMessage: '',
       closeTimeout: null,
+      sending: false,
+      pollingInterval: null,
     };
   },
   computed: {
@@ -374,6 +378,7 @@ export default {
         this.carts = [];
         this.chats = [];
         this.activeModal = null;
+        this.stopPolling();
       }
     },
     '$route.query.q': {
@@ -385,9 +390,8 @@ export default {
     '$route.path': {
       immediate: true,
       handler(newPath) {
-        // Close chat modal if on /buyer/messages
         if (newPath === '/buyer/messages' && this.activeModal === 'chat') {
-          this.activeModal = null;
+          this.closeChatModal();
         }
       },
     },
@@ -399,9 +403,11 @@ export default {
       this.fetchChats();
     }
   },
+  beforeDestroy() {
+    this.stopPolling();
+  },
   methods: {
     setActiveModal(modal) {
-      // Only allow chat modal if not on /buyer/messages
       if (modal === 'chat' && this.$route.path === '/buyer/messages') {
         return;
       }
@@ -546,18 +552,27 @@ export default {
       }
       this.selectedChat = { ...chat, messages: [] };
       this.setActiveModal('chat');
+      await this.fetchChatMessages(chat.seller.id);
+      this.startPolling();
+    },
+    async fetchChatMessages(sellerId) {
       try {
-        const response = await axios.get(`/buyer/chats/detail?seller_id=${chat.seller.id}`, {
+        const response = await axios.get(`/buyer/chats/detail?seller_id=${sellerId}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
         console.log('Chat messages response:', JSON.stringify(response.data, null, 2));
         this.selectedChat.messages = response.data.data.messages || [];
-        if (chat.unread_count > 0) {
-          await axios.put(`/buyer/chats/${chat.seller.id}/read`, {}, {
+        if (this.$refs.chatMessages) {
+          this.$nextTick(() => {
+            this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight;
+          });
+        }
+        if (this.selectedChat.unread_count > 0) {
+          await axios.put(`/buyer/chats/${sellerId}/read`, {}, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           });
           this.chats = this.chats.map(c =>
-            c.seller.id === chat.seller.id ? { ...c, unread_count: 0 } : c
+            c.seller.id === sellerId ? { ...c, unread_count: 0 } : c
           );
         }
       } catch (error) {
@@ -568,6 +583,51 @@ export default {
           this.logout();
         }
       }
+    },
+    async sendMessage() {
+      if (!this.newMessage.trim() || this.sending) return;
+      this.sending = true;
+      try {
+        const response = await axios.post(
+          '/buyer/chats/send',
+          { receiver_id: this.selectedChat.seller.id, content: this.newMessage },
+          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        );
+        console.log('Send message response:', JSON.stringify(response.data, null, 2));
+        this.selectedChat.messages.push(response.data.data);
+        this.newMessage = '';
+        this.$nextTick(() => {
+          this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight;
+        });
+        await this.fetchChats();
+      } catch (error) {
+        console.error('Error sending message:', error.response?.data || error.message);
+        if (error.response?.status === 401) {
+          this.logout();
+        }
+      } finally {
+        this.sending = false;
+      }
+    },
+    startPolling() {
+      if (this.pollingInterval) {
+        clearInterval(this.pollingInterval);
+      }
+      this.pollingInterval = setInterval(() => {
+        if (this.activeModal === 'chat' && this.selectedChat.seller.id) {
+          this.fetchChatMessages(this.selectedChat.seller.id);
+        }
+      }, 5000);
+    },
+    stopPolling() {
+      if (this.pollingInterval) {
+        clearInterval(this.pollingInterval);
+        this.pollingInterval = null;
+      }
+    },
+    closeChatModal() {
+      this.setActiveModal(null);
+      this.stopPolling();
     },
     formatDate(date) {
       if (!date) return '';
@@ -582,26 +642,8 @@ export default {
     formatPrice(price) {
       return Number(price).toLocaleString('vi-VN');
     },
-    async sendMessage() {
-      if (!this.newMessage.trim()) return;
-      try {
-        const response = await axios.post(
-          '/buyer/chats/send',
-          { receiver_id: this.selectedChat.seller.id, content: this.newMessage },
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-        );
-        console.log('Send message response:', JSON.stringify(response.data, null, 2));
-        this.selectedChat.messages.push(response.data.data);
-        this.newMessage = '';
-        await this.fetchChats();
-      } catch (error) {
-        console.error('Error sending message:', error.response?.data || error.message);
-        if (error.response?.status === 401) {
-          this.logout();
-        }
-      }
-    },
     logout() {
+      this.stopPolling();
       localStorage.removeItem('token');
       localStorage.removeItem('role');
       localStorage.removeItem('loginType');
@@ -679,5 +721,64 @@ export default {
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: #f97316 #f1f1f1;
+}
+
+.message-bubble {
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-bubble p {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.4;
+  max-width: 100%;
+  word-wrap: break-word;
+}
+
+.message-bubble p.sent {
+  background: #f97316;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.message-bubble p.received {
+  background: #fed7aa;
+  color: #1f2937;
+  border-bottom-left-radius: 4px;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 6px;
+  text-align: inherit;
+}
+
+.flex.justify-end .message-bubble {
+  align-items: flex-end;
+}
+
+.flex.justify-start .message-bubble {
+  align-items: flex-start;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

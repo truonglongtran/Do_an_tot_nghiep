@@ -83,7 +83,7 @@
               <label class="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
-                  :checked="partner.is_active"
+                  v-model="partner.is_active"
                   @change="updateShippingPartners"
                   class="sr-only peer"
                 />

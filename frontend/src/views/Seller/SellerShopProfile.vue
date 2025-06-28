@@ -7,9 +7,10 @@
       <!-- Cover Image -->
       <div class="relative">
         <img
-          :src="shop.cover_image_url || 'https://via.placeholder.com/800x200'"
+          :src="getImageUrl(shop.cover_image_url)"
           alt="Cover"
           class="cover-image"
+          @error="handleImageError"
         />
         <div v-if="editingField !== 'cover_image'" class="edit-button">
           <button @click="startEditing('cover_image')" class="btn btn-edit">Sửa</button>
@@ -36,9 +37,10 @@
         <!-- Avatar -->
         <div class="avatar-container">
           <img
-            :src="shop.avatar_url || 'https://via.placeholder.com/100'"
+            :src="getImageUrl(shop.avatar_url)"
             alt="Avatar"
             class="avatar"
+            @error="handleImageError"
           />
           <div v-if="editingField !== 'avatar'" class="edit-button avatar-edit">
             <button @click="startEditing('avatar')" class="btn btn-edit">Sửa</button>
@@ -183,6 +185,20 @@ export default {
         }
       }
     },
+    getImageUrl(imgUrl) {
+      if (!imgUrl) {
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      return `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+    },
+    handleImageError(event) {
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+    },
     formatDate(date) {
       if (!date) return 'N/A';
       return new Date(date).toLocaleDateString('vi-VN', {
@@ -220,7 +236,7 @@ export default {
             formData.append(key, value);
           }
         }
-        await axios.post('/seller/shop/profile', formData, {
+        const response = await axios.post('/seller/shop/profile', formData, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data',

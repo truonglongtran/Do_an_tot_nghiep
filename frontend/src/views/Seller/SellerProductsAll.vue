@@ -48,14 +48,14 @@
         <tbody>
           <tr v-for="product in filteredProducts" :key="product.id" class="hover:bg-gray-50 transition">
             <td class="px-4 py-2 border-b text-center align-middle" style="width: 50px;">
-              <input type="checkbox" :name="'product_' + product.id" :value="product.id" class="eds-checkbox__input">
+              <input type="checkbox" :name="'product_' + product.id" :value="product.id" class="eds-checkbox__input" v-model="selectedProducts">
             </td>
             <td class="px-4 py-2 border-b" style="width: 1050px;">
               <table class="w-full border-collapse" style="table-layout: fixed; width: 1050px;">
                 <tr class="product-header">
                   <td style="width: 350px; padding: 0.5rem;">
                     <div class="flex items-center">
-                      <img :src="product.thumbnail || 'https://placehold.co/50x50'" :alt="product.name || 'Product'" class="w-16 h-16 mr-4 object-cover">
+                      <img :src="getImageUrl(product.thumbnail)" :alt="product.name || 'Product'" class="w-16 h-16 mr-4 object-cover" @error="handleImageError($event, product.thumbnail)">
                       <div>
                         <a :href="'/portal/product/' + product.id" class="text-blue-600 hover:underline product-name-wrap" target="_blank">
                           {{ product.name || 'N/A' }}
@@ -86,12 +86,12 @@
                 <tr v-for="variant in product.variants" :key="variant.id" class="variant-row">
                   <td style="width: 350px; padding: 0.5rem 0.5rem 0.5rem 2rem;">
                     <div class="flex items-center variant-content">
-                      <img :src="variant.image_url || 'https://placehold.co/50x50'" :alt="getPrimaryAttribute(variant) || 'Variant'" class="w-12 h-12 mr-2 object-cover">
+                      <img :src="getImageUrl(variant.image_url)" :alt="getPrimaryAttribute(variant) || 'Variant'" class="w-12 h-12 mr-2 object-cover" @error="handleImageError($event, variant.image_url)">
                       <div>
-                        <p class="text-sm" :class="{ 'text-red-500': isInvalidAttribute(variant) }">
+                        <p class="text-sm">
                           {{ getPrimaryAttribute(variant) || 'Không có thuộc tính' }}
                         </p>
-                        <p v-for="attr in getOtherAttributes(variant)" :key="attr.name" class="text-sm text-gray-600" :class="{ 'text-red-500': isInvalidAttributeValue(attr) }">
+                        <p v-for="attr in getOtherAttributes(variant)" :key="attr.name" class="text-sm text-gray-600">
                           {{ attr.name }}: {{ attr.value }}
                         </p>
                         <p class="text-sm text-gray-600">SKU: {{ variant.sku || '-' }}</p>
@@ -152,6 +152,7 @@
     />
   </div>
 </template>
+
 <script>
 import axios from 'axios';
 import FilterSearch from './component/SellerFilterSearch.vue';
@@ -161,36 +162,37 @@ export default {
   name: 'SellerProductsAll',
   components: {
     FilterSearch,
-    SellerConfirmModal
+    SellerConfirmModal,
   },
   data() {
     return {
       allProducts: [],
+      selectedProducts: [],
       search: '',
       currentFilter: 'all',
       filters: [
         { key: 'all', label: 'Tất cả', count: 0 },
         { key: 'pending', label: 'Chờ duyệt', count: 0 },
         { key: 'approved', label: 'Đã duyệt', count: 0 },
-        { key: 'banned', label: 'Bị cấm', count: 0 }
+        { key: 'banned', label: 'Bị cấm', count: 0 },
       ],
       statusText: {
         pending: 'Chờ duyệt',
         approved: 'Đã duyệt',
-        banned: 'Bị cấm'
+        banned: 'Bị cấm',
       },
-      debouncedApplySearch: null,
-      validAttributeValues: {},
       showConfirmModal: false,
-      confirmTitle: 'Xác nhận',
+      confirmTitle: '',
       confirmMessage: '',
+      confirmAction: null,
       selectedVariant: null,
-      newStatus: null
+      newStatus: null,
+      placeholderImage: 'https://placehold.co/150',
+      searchTimeout: null, // Thêm thuộc tính để lưu timeout của search
     };
   },
   computed: {
     filteredProducts() {
-      console.log('Computing filteredProducts with:', { search: this.search, currentFilter: this.currentFilter });
       return this.allProducts.filter(product => {
         const searchLower = this.search.trim().toLowerCase();
         const matchSearch = searchLower === '' ||
@@ -205,68 +207,58 @@ export default {
         all: this.allProducts.length,
         pending: this.allProducts.filter(p => p.status === 'pending').length,
         approved: this.allProducts.filter(p => p.status === 'approved').length,
-        banned: this.allProducts.filter(p => p.status === 'banned').length
+        banned: this.allProducts.filter(p => p.status === 'banned').length,
       };
-    }
+    },
   },
   created() {
-    const debounce = (func, wait) => {
-      let timeout;
-      return function (...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-      };
-    };
-    this.debouncedApplySearch = debounce(this.applySearch, 300);
+    // Không cần debounce từ lodash nữa
+    this.debouncedApplySearch = this.debounce(this.applySearch, 300);
   },
   async mounted() {
-    await this.fetchValidAttributes();
     await this.fetchProducts();
     this.updateFilterCounts();
   },
   watch: {
-    currentFilter(newValue) {
-      console.log('currentFilter changed to:', newValue);
+    currentFilter() {
       this.applySearch();
-    }
+    },
   },
   methods: {
-    async fetchValidAttributes() {
+    // Hàm debounce tự tạo
+    debounce(func, delay) {
+      return (...args) => {
+        if (this.searchTimeout) clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(() => {
+          func.apply(this, args);
+        }, delay);
+      };
+    },
+    
+    async fetchProducts() {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:8000/api/seller/categories/attributes', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        this.validAttributeValues = response.data.data.reduce((map, attr) => ({
-          ...map,
-          [attr.name.toLowerCase()]: attr.values.map(v => v.value.toLowerCase())
-        }), {});
-        console.log('Valid attribute values loaded:', this.validAttributeValues);
-      } catch (error) {
-        console.error('Error fetching valid attributes:', error);
-      }
-    },
-    async fetchProducts() {
-      console.log('Fetching all products');
-      const token = localStorage.getItem('token');
-      try {
         if (!token) {
           throw new Error('No token found. Please login again.');
         }
+        console.log('Fetching products with params:', { search: this.search, status: this.currentFilter });
         const response = await axios.get('http://localhost:8000/api/seller/products', {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            search: this.search,
+            status: this.currentFilter === 'all' ? '' : this.currentFilter,
+          },
         });
-        console.log('API response:', response.data);
         this.allProducts = (response.data.data || []).map(product => ({
           ...product,
           variants: product.variants.map(variant => ({
             ...variant,
-            isLoading: false // Thêm isLoading cho mỗi variant
-          }))
+            isLoading: false,
+          })),
         }));
         this.updateFilterCounts();
       } catch (error) {
-        console.error('Error fetching products:', error);
+        console.error('Error fetching products:', error.response?.data || error.message);
         this.allProducts = [];
         alert('Lỗi khi lấy danh sách sản phẩm: ' + (error.response?.data?.message || error.message));
       }
@@ -274,160 +266,136 @@ export default {
     updateFilterCounts() {
       this.filters = this.filters.map(filter => ({
         ...filter,
-        count: this.filterCounts[filter.key] || 0
+        count: this.filterCounts[filter.key] || 0,
       }));
-      console.log('Updated filter counts:', this.filters);
     },
     applySearch() {
-      console.log('Applying search with:', { search: this.search, currentFilter: this.currentFilter });
-      this.updateFilterCounts();
+      this.fetchProducts();
     },
-    openToggleConfirmModal(variant, newStatus) {
-      console.log('Opening toggle confirm modal for variant:', variant.id, 'New status:', newStatus);
-      this.selectedVariant = { ...variant };
-      this.newStatus = newStatus;
-      this.confirmTitle = 'Xác nhận thay đổi trạng thái';
-      this.confirmMessage = `Bạn có chắc chắn muốn thay đổi trạng thái của biến thể "${this.getPrimaryAttribute(variant) || 'N/A'}" thành ${newStatus === 'active' ? 'Hoạt động' : 'Ngừng hoạt động'}?`;
-      this.showConfirmModal = true;
+    getImageUrl(imgUrl) {
+      if (!imgUrl) return this.placeholderImage;
+      if (/^blob:/.test(imgUrl)) return imgUrl; // Preview ảnh cục bộ
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      return `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
     },
-    async handleConfirm() {
-      console.log('Handling confirm action for variant:', this.selectedVariant?.id, 'New status:', this.newStatus);
-      if (!this.selectedVariant || !this.newStatus) {
-        console.error('Missing selectedVariant or newStatus');
-        alert('Lỗi: Thiếu thông tin xác nhận.');
-        this.resetModal();
-        return;
-      }
-      const product = this.allProducts.find(p => p.variants.some(v => v.id === this.selectedVariant.id));
-      const variant = product?.variants.find(v => v.id === this.selectedVariant.id);
-      if (!variant) {
-        console.error('Variant not found:', this.selectedVariant.id);
-        alert('Lỗi: Không tìm thấy biến thể.');
-        this.resetModal();
-        return;
-      }
-      await this.toggleVariantStatus(variant);
-      this.resetModal();
+    handleImageError(event, imgUrl) {
+      console.error('Lỗi tải ảnh:', { img_url: imgUrl, attempted_url: event.target.src });
+      event.target.src = this.placeholderImage;
     },
-    handleCancel() {
-      console.log('Handling cancel action');
-      this.resetModal();
+    formatCurrency(value) {
+      return value ? value.toLocaleString('vi-VN') : '0';
     },
-    resetModal() {
-      console.log('Resetting modal state');
-      this.showConfirmModal = false;
-      this.selectedVariant = null;
-      this.newStatus = null;
-      this.confirmTitle = 'Xác nhận';
-      this.confirmMessage = '';
+    getPrimaryAttribute(variant) {
+      return variant.color || variant.attributes?.[0]?.value || null;
     },
-    async toggleVariantStatus(variant) {
-      console.log('Toggling status for variant:', variant.id, 'New status:', this.newStatus);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-        this.$router.push('/seller/login');
-        return;
-      }
-      variant.isLoading = true;
-      try {
-        await axios.put(`http://localhost:8000/api/seller/variants/${variant.id}/status`, {
-          status: this.newStatus
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        variant.status = this.newStatus;
-        alert('Cập nhật trạng thái biến thể thành công');
-      } catch (error) {
-        console.error('Error updating variant status:', error);
-        alert('Lỗi khi cập nhật trạng thái biến thể: ' + (error.response?.data?.message || error.message));
-      } finally {
-        variant.isLoading = false;
-        await this.fetchProducts(); // Tải lại danh sách sản phẩm để đảm bảo đồng bộ
-      }
+    getOtherAttributes(variant) {
+      return variant.attributes?.slice(1) || [];
     },
     editProduct(id) {
       this.$router.push(`/seller/products/edit/${id}`);
     },
-    async deleteProduct(id) {
-      if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-        return;
+    deleteProduct(id) {
+      this.confirmTitle = 'Xác nhận xóa sản phẩm';
+      this.confirmMessage = 'Bạn có chắc chắn muốn xóa sản phẩm này? Hành động này không thể hoàn tác.';
+      this.confirmAction = 'delete';
+      this.selectedVariant = { id };
+      this.showConfirmModal = true;
+    },
+    openToggleConfirmModal(variant, newStatus) {
+      this.confirmTitle = `Xác nhận ${newStatus === 'active' ? 'kích hoạt' : 'tắt'} biến thể`;
+      this.confirmMessage = `Bạn có chắc chắn muốn ${newStatus === 'active' ? 'kích hoạt' : 'tắt'} biến thể này?`;
+      this.confirmAction = 'toggleVariant';
+      this.selectedVariant = variant;
+      this.newStatus = newStatus;
+      this.showConfirmModal = true;
+    },
+    async handleConfirm() {
+      if (this.confirmAction === 'delete') {
+        await this.deleteProductConfirm(this.selectedVariant.id);
+      } else if (this.confirmAction === 'toggleVariant') {
+        await this.updateVariantStatus(this.selectedVariant, this.newStatus);
       }
+      this.showConfirmModal = false;
+      this.confirmAction = null;
+      this.selectedVariant = null;
+      this.newStatus = null;
+    },
+    handleCancel() {
+      this.showConfirmModal = false;
+      this.confirmAction = null;
+      this.selectedVariant = null;
+      this.newStatus = null;
+    },
+    async deleteProductConfirm(id) {
       try {
         const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No token found. Please login again.');
+        }
         await axios.delete(`http://localhost:8000/api/seller/products/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
+        this.allProducts = this.allProducts.filter(product => product.id !== id);
+        this.updateFilterCounts();
         alert('Xóa sản phẩm thành công');
-        await this.fetchProducts();
       } catch (error) {
-        console.error('Error deleting product:', error);
+        console.error('Error deleting product:', error.response?.data || error.message);
         alert('Lỗi khi xóa sản phẩm: ' + (error.response?.data?.message || error.message));
       }
     },
-    formatCurrency(value) {
-      return new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 0 }).format(value || 0);
-    },
-    getPrimaryAttribute(variant) {
-      if (!variant.attributes || !Array.isArray(variant.attributes)) {
-        return null;
-      }
-      const priorities = ['màu sắc', 'kích cỡ', 'chất liệu'];
-      for (const priority of priorities) {
-        const attr = variant.attributes.find(a => a.name?.toLowerCase() === priority);
-        if (attr && attr.value) {
-          return attr.value;
+    async updateVariantStatus(variant, status) {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No token found. Please login again.');
         }
+        variant.isLoading = true;
+        await axios.put(`http://localhost:8000/api/seller/products/variants/${variant.id}/status`, 
+          { status },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        variant.status = status;
+        alert(`Đã ${status === 'active' ? 'kích hoạt' : 'tắt'} biến thể thành công`);
+      } catch (error) {
+        console.error('Error updating variant status:', error.response?.data || error.message);
+        alert('Lỗi khi cập nhật trạng thái biến thể: ' + (error.response?.data?.message || error.message));
+      } finally {
+        variant.isLoading = false;
       }
-      return null;
     },
-    getOtherAttributes(variant) {
-      if (!variant.attributes || !Array.isArray(variant.attributes)) {
-        return [];
-      }
-      const primaryValue = this.getPrimaryAttribute(variant);
-      return variant.attributes
-        .filter(attr => {
-          const isPrimary = primaryValue && attr.value === primaryValue && attr.name?.toLowerCase() === this.getPrimaryAttributeName(variant);
-          return !isPrimary && attr.value;
-        })
-        .map(attr => ({
-          name: attr.name,
-          value: attr.value
-        }));
-    },
-    getPrimaryAttributeName(variant) {
-      if (!variant.attributes || !Array.isArray(variant.attributes)) {
-        return null;
-      }
-      const priorities = ['màu sắc', 'kích cỡ', 'chất liệu'];
-      for (const priority of priorities) {
-        const attr = variant.attributes.find(a => a.name?.toLowerCase() === priority);
-        if (attr && attr.value) {
-          return attr.name?.toLowerCase();
-        }
-      }
-      return null;
-    },
-    isInvalidAttribute(variant) {
-      const primaryValue = this.getPrimaryAttribute(variant);
-      if (!primaryValue) return false;
-      const attributeName = this.getPrimaryAttributeName(variant);
-      const validValues = this.validAttributeValues[attributeName] || [];
-      return !validValues.includes(primaryValue.toLowerCase());
-    },
-    isInvalidAttributeValue(attr) {
-      const validValues = this.validAttributeValues[attr.name.toLowerCase()] || [];
-      return !validValues.includes(attr.value.toLowerCase());
-    }
-  }
+  },
 };
+
 </script>
+
 <style scoped>
-.transition-transform {
-  transition: transform 0.3s ease;
+.eds-table {
+  border-collapse: collapse;
 }
-.transition-colors {
-  transition: background-color 0.3s ease;
+.eds-table__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.product-variation-header {
+  width: 100%;
+}
+.list-header-item {
+  flex-shrink: 0;
+}
+.product-name-wrap {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.variant-row {
+  border-top: 1px solid #e5e7eb;
+}
+.variant-content {
+  padding-left: 1rem;
 }
 </style>

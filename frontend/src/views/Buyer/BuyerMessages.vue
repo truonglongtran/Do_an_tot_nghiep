@@ -15,9 +15,16 @@
           @click="selectSeller(conversation.seller.id)"
         >
           <div class="seller-info">
-            <h3>{{ conversation.seller.username }}</h3>
-            <p class="last-message">{{ conversation.last_message?.content || 'Chưa có tin nhắn' }}</p>
-            <p class="timestamp">{{ formatDateTime(conversation.last_message?.created_at) }}</p>
+            <img
+              :src="conversation.shop?.avatar_url || 'https://via.placeholder.com/50'"
+              alt="Shop Avatar"
+              class="shop-avatar"
+            />
+            <div class="seller-details">
+              <h3>{{ conversation.shop?.shop_name || 'Shop' }}</h3>
+              <p class="last-message">{{ conversation.last_message?.content || 'Chưa có tin nhắn' }}</p>
+              <p class="timestamp">{{ formatDateTime(conversation.last_message?.created_at) }}</p>
+            </div>
           </div>
           <div v-if="conversation.unread_count > 0" class="unread-badge">
             {{ conversation.unread_count }}
@@ -31,13 +38,22 @@
       <!-- Cửa sổ chat -->
       <div class="chat-window" v-if="selectedSellerId">
         <div class="chat-header">
-          <h3>{{ selectedSeller?.username || 'Chọn một người bán để xem tin nhắn' }}</h3>
+          <img
+            :src="selectedConversation?.shop?.avatar_url || 'https://via.placeholder.com/50'"
+            alt="Shop Avatar"
+            class="shop-avatar"
+          />
+          <h3>{{ selectedConversation?.shop?.shop_name || 'Chọn một shop để xem tin nhắn' }}</h3>
         </div>
         <div class="chat-messages" ref="chatMessages">
           <div
             v-for="(message, index) in selectedMessages"
-            :key="index"
-            :class="['message', message.sender_type === 'buyer' ? 'sent' : 'received']"
+            :key="message.created_at"
+            class="message-bubble"
+            :class="{
+              'sent': message.sender_type === 'buyer',
+              'received': message.sender_type === 'seller'
+            }"
           >
             <p>{{ message.content }}</p>
             <span class="message-time">{{ formatDateTime(message.created_at) }}</span>
@@ -64,7 +80,7 @@
         </div>
       </div>
       <div v-else class="chat-placeholder">
-        <p>Chọn một người bán để bắt đầu trò chuyện.</p>
+        <p>Chọn một shop để bắt đầu trò chuyện.</p>
       </div>
     </div>
   </div>
@@ -87,6 +103,7 @@ export default {
     const successMessage = ref('');
     const chatMessages = ref(null);
     const currentBuyerId = ref(null);
+    const pollingInterval = ref(null);
 
     const fetchConversations = async () => {
       isLoading.value = true;
@@ -94,7 +111,6 @@ export default {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
-          console.error('No token found in localStorage');
           throw new Error('Không tìm thấy token');
         }
         console.log('Fetching conversations with token:', token);
@@ -125,15 +141,20 @@ export default {
     const selectSeller = async (sellerId) => {
       console.log('Selecting seller with ID:', sellerId);
       if (!sellerId) {
-        console.warn('No sellerId provided');
-        errorMessage.value = 'Vui lòng chọn một người bán để xem tin nhắn';
+        errorMessage.value = 'Vui lòng chọn một shop để xem tin nhắn';
         selectedMessages.value = [];
         selectedSellerId.value = null;
+        stopPolling();
         return;
       }
 
       selectedSellerId.value = sellerId;
       errorMessage.value = '';
+      await fetchMessages(sellerId);
+      startPolling(sellerId);
+    };
+
+    const fetchMessages = async (sellerId) => {
       try {
         const token = localStorage.getItem('token');
         console.log('Fetching messages for sellerId:', sellerId, 'with token:', token);
@@ -159,17 +180,28 @@ export default {
         if (error.response?.status === 404 && error.response?.data?.message === 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!') {
           errorMessage.value = 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!';
           selectedMessages.value = [];
+          if (error.response?.data?.data?.seller && error.response?.data?.data?.shop) {
+            const conversation = conversations.value.find(c => c.seller.id === sellerId);
+            if (!conversation) {
+              conversations.value.push({
+                seller: error.response.data.data.seller,
+                shop: error.response.data.data.shop,
+                last_message: null,
+                unread_count: 0,
+              });
+            }
+          }
         }
       }
     };
 
     const sendMessage = async () => {
-      if (!newMessage.value.trim() || !selectedSellerId.value) {
+      if (!newMessage.value.trim() || !selectedSellerId.value || sending.value) {
         console.warn('Cannot send message: newMessage or selectedSellerId is empty', {
           newMessage: newMessage.value,
           selectedSellerId: selectedSellerId.value,
         });
-        errorMessage.value = 'Vui lòng chọn người bán và nhập tin nhắn';
+        errorMessage.value = 'Vui lòng chọn shop và nhập tin nhắn';
         return;
       }
       sending.value = true;
@@ -194,8 +226,19 @@ export default {
         if (conversation) {
           conversation.last_message = response.data.data;
         } else {
+          const sellerResponse = await axios.get(`/buyer/sellers?seller_id=${selectedSellerId.value}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          console.log('API response for seller:', JSON.stringify(sellerResponse.data, null, 2));
+          const sellerData = sellerResponse.data.data.find(s => s.id === selectedSellerId.value) || {
+            id: selectedSellerId.value,
+            username: 'Unknown',
+            avatar_url: 'https://via.placeholder.com/50',
+            shop: { shop_name: 'Unknown', avatar_url: 'https://via.placeholder.com/50' },
+          };
           conversations.value.push({
-            seller: { id: selectedSellerId.value, username: selectedSeller.value?.username || 'Unknown', avatar_url: 'https://via.placeholder.com/50' },
+            seller: { id: selectedSellerId.value, username: sellerData.username, avatar_url: sellerData.avatar_url },
+            shop: sellerData.shop || { shop_name: 'Unknown', avatar_url: sellerData.avatar_url },
             last_message: response.data.data,
             unread_count: 0,
           });
@@ -208,9 +251,14 @@ export default {
         });
         successMessage.value = 'Tin nhắn đã được gửi';
         setTimeout(() => (successMessage.value = ''), 3000);
+        await fetchConversations();
       } catch (error) {
         console.error('Error sending message:', error.response?.data || error.message);
         errorMessage.value = error.response?.data?.message || 'Lỗi khi gửi tin nhắn';
+        if (error.response?.status === 401) {
+          localStorage.removeItem('token');
+          window.location.href = '/buyer/login';
+        }
       } finally {
         sending.value = false;
       }
@@ -229,6 +277,24 @@ export default {
       }
     };
 
+    const startPolling = (sellerId) => {
+      if (pollingInterval.value) {
+        clearInterval(pollingInterval.value);
+      }
+      pollingInterval.value = setInterval(() => {
+        if (selectedSellerId.value === sellerId) {
+          fetchMessages(sellerId);
+        }
+      }, 5000);
+    };
+
+    const stopPolling = () => {
+      if (pollingInterval.value) {
+        clearInterval(pollingInterval.value);
+        pollingInterval.value = null;
+      }
+    };
+
     const formatDateTime = (date) => {
       if (!date) return 'N/A';
       return new Date(date).toLocaleString('vi-VN', {
@@ -240,10 +306,10 @@ export default {
       });
     };
 
-    const selectedSeller = computed(() => {
+    const selectedConversation = computed(() => {
       const conversation = conversations.value.find(c => c.seller.id === selectedSellerId.value);
-      console.log('Selected seller:', JSON.stringify(conversation?.seller || null, null, 2));
-      return conversation ? conversation.seller : null;
+      console.log('Selected conversation:', JSON.stringify(conversation || null, null, 2));
+      return conversation || null;
     });
 
     onMounted(() => {
@@ -252,7 +318,8 @@ export default {
     });
 
     onUnmounted(() => {
-      console.log('Component unmounted, resetting state');
+      console.log('Component unmounted, stopping polling');
+      stopPolling();
       selectedSellerId.value = null;
       selectedMessages.value = [];
     });
@@ -271,7 +338,7 @@ export default {
       selectSeller,
       sendMessage,
       formatDateTime,
-      selectedSeller,
+      selectedConversation,
     };
   },
 };
@@ -287,19 +354,19 @@ export default {
 h2 {
   font-size: 24px;
   font-weight: bold;
-  color: #f97316; /* Đồng bộ màu cam với Header.vue */
+  color: #f97316;
   margin-bottom: 20px;
 }
 .error-message {
-  background: #fee2e2; /* Đỏ nhạt, đồng bộ với Header.vue */
-  color: #dc2626; /* Đỏ đậm */
+  background: #fee2e2;
+  color: #dc2626;
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 20px;
 }
 .success-message {
-  background: #dcfce7; /* Xanh nhạt, đồng bộ với Header.vue */
-  color: #15803d; /* Xanh đậm */
+  background: #dcfce7;
+  color: #15803d;
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 20px;
@@ -312,7 +379,7 @@ h2 {
 .conversation-list {
   width: 300px;
   background: #fff;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền với Header.vue */
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
@@ -322,7 +389,7 @@ h2 {
   justify-content: space-between;
   align-items: center;
   padding: 15px;
-  border-bottom: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border-bottom: 1px solid #e5e7eb;
   cursor: pointer;
   transition: background-color 0.3s;
 }
@@ -330,30 +397,42 @@ h2 {
   background: #f5f5f5;
 }
 .conversation-item.selected {
-  background: #fff7ed; /* Nền cam nhạt khi chọn */
+  background: #fff7ed;
 }
 .seller-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-grow: 1;
 }
-.seller-info h3 {
+.shop-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.seller-details {
+  flex-grow: 1;
+}
+.seller-details h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937; /* Xám đậm, đồng bộ với Header.vue */
+  color: #1f2937;
 }
 .last-message {
   font-size: 14px;
-  color: #6b7280; /* Xám trung, đồng bộ */
+  color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 180px;
 }
 .timestamp {
   font-size: 12px;
-  color: #9ca3af; /* Xám nhạt, đồng bộ */
+  color: #9ca3af;
 }
 .unread-badge {
-  background: #dc2626; /* Đỏ, đồng bộ với Header.vue */
+  background: #dc2626;
   color: #fff;
   border-radius: 12px;
   padding: 2px 8px;
@@ -363,71 +442,90 @@ h2 {
 .chat-window {
   flex-grow: 1;
   background: #fff;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
 }
 .chat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 15px;
-  border-bottom: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border-bottom: 1px solid #e5e7eb;
 }
 .chat-header h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #f97316; /* Màu cam, đồng bộ với Header.vue */
+  color: #f97316;
 }
 .chat-messages {
   flex-grow: 1;
   padding: 15px;
   overflow-y: auto;
 }
-.message {
-  margin-bottom: 10px;
+.message-bubble {
+  margin-bottom: 15px;
   max-width: 70%;
+  width: fit-content;
+  display: flex;
+  flex-direction: column;
 }
-.message.sent {
+.message-bubble.sent {
   margin-left: auto;
-  text-align: right;
 }
-.message.received {
+.message-bubble.received {
   margin-right: auto;
-  text-align: left;
 }
-.message p {
-  background: #fed7aa; /* Cam nhạt cho tin nhắn nhận, đồng bộ với Header.vue */
-  padding: 10px;
-  border-radius: 8px;
+.message-bubble p {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 12px;
   font-size: 14px;
-  color: #1f2937; /* Xám đậm */
+  margin: 0;
+  line-height: 1.4;
+  max-width: 100%;
+  word-wrap: break-word;
 }
-.message.sent p {
-  background: #f97316; /* Cam, đồng bộ với Header.vue */
+.message-bubble.sent p {
+  background: #f97316;
   color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.message-bubble.received p {
+  background: #fed7aa;
+  color: #1f2937;
+  border-bottom-left-radius: 4px;
 }
 .message-time {
-  font-size: 12px;
-  color: #9ca3af; /* Xám nhạt, đồng bộ */
-  margin-top: 5px;
-  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 6px;
+  text-align: inherit;
+}
+.message-bubble.sent .message-time {
+  text-align: right;
+}
+.message-bubble.received .message-time {
+  text-align: left;
 }
 .chat-input {
   display: flex;
   gap: 10px;
   padding: 15px;
-  border-top: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border-top: 1px solid #e5e7eb;
 }
 .chat-input input {
   flex-grow: 1;
   padding: 10px;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.3s;
 }
 .chat-input input:focus {
-  border-color: #f97316; /* Màu cam khi focus */
+  border-color: #f97316;
   outline: none;
 }
 .btn {
@@ -439,14 +537,14 @@ h2 {
   transition: background-color 0.3s;
 }
 .btn-send {
-  background: #f97316; /* Màu cam, đồng bộ */
+  background: #f97316;
   color: #fff;
 }
 .btn-send:hover {
-  background: #ea580c; /* Cam đậm khi hover */
+  background: #ea580c;
 }
 .btn-send:disabled {
-  background: #fb923c; /* Cam nhạt khi disabled */
+  background: #fb923c;
   cursor: not-allowed;
 }
 .spinner {
@@ -468,7 +566,7 @@ h2 {
   align-items: center;
   justify-content: center;
   background: #fff;
-  border: 1px solid #e5e7eb; /* Đồng bộ viền */
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -477,7 +575,7 @@ h2 {
   padding: 20px;
 }
 .text-gray-500 {
-  color: #6b7280; /* Đồng bộ xám */
+  color: #6b7280;
 }
 @media (max-width: 768px) {
   .chat-container {

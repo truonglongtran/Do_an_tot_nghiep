@@ -1,4 +1,3 @@
-<!-- src/views/Buyer/OrderTracking.vue -->
 <template>
   <div class="container mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold text-orange-500 mb-6">Theo dõi đơn hàng</h1>
@@ -8,7 +7,7 @@
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
       </svg>
     </div>
-    <div v-else-if="error" class="text-red-500 text-center mb-6">
+    <div v-else-if="error" class="text-red-500 text-center mb-6 bg-red-100 p-4 rounded-lg">
       {{ error }}
     </div>
     <div v-else class="space-y-8">
@@ -19,7 +18,7 @@
           Không có đơn hàng nào đang chờ xác nhận
         </div>
         <div v-else class="space-y-4">
-          <div v-for="order of pendingOrders" :key="order.id" class="border rounded-lg p-4">
+          <div v-for="order of pendingOrders" :key="order.id" class="border rounded-lg p-4 bg-white shadow-sm">
             <p class="font-semibold">Mã đơn: {{ order.id }}</p>
             <p class="text-gray-600">Tổng tiền: {{ formatPrice(order.total) }}</p>
             <p class="text-gray-600">Ngày đặt: {{ formatDate(order.created_at) }}</p>
@@ -37,7 +36,7 @@
           Không có đơn hàng nào đang giao
         </div>
         <div v-else class="space-y-4">
-          <div v-for="order in inDeliveryOrders" :key="order.id" class="border rounded-lg p-4">
+          <div v-for="order in inDeliveryOrders" :key="order.id" class="border rounded-lg p-4 bg-white shadow-sm">
             <p class="font-semibold">Mã đơn: {{ order.id }}</p>
             <p class="text-gray-600">Tổng tiền: {{ formatPrice(order.total) }}</p>
             <p class="text-gray-600">Ngày đặt: {{ formatDate(order.created_at) }}</p>
@@ -56,7 +55,7 @@
           Không có đơn hàng nào hoàn thành
         </div>
         <div v-else class="space-y-4">
-          <div v-for="order in completedOrders" :key="order.id" class="border rounded-lg p-4">
+          <div v-for="order in completedOrders" :key="order.id" class="border rounded-lg p-4 bg-white shadow-sm">
             <p class="font-semibold">Mã đơn: {{ order.id }}</p>
             <p class="text-gray-600">Tổng tiền: {{ formatPrice(order.total) }}</p>
             <p class="text-gray-600">Ngày đặt: {{ formatDate(order.created_at) }}</p>
@@ -70,19 +69,24 @@
                 />
                 <div class="flex-1">
                   <p class="text-gray-600">{{ item.product?.name || 'Sản phẩm' }}</p>
+                  <p v-if="item.product_variant" class="text-gray-600">{{ item.product_variant.name }}</p>
                   <p class="text-orange-500">{{ formatPrice(item.product_variant?.price || item.product?.price || 0) }} x {{ item.quantity }}</p>
                 </div>
-                <router-link
-                  :to="{ path: '/buyer/reviews/create', query: { order_id: order.id, product_id: item.product_id, variant_id: item.product_variant_id }}"
-                  class="text-orange-500 hover:underline"
-                >
-                  Đánh giá
-                </router-link>
+                <span v-if="item.reviewed" class="text-gray-500">Đã đánh giá</span>
               </div>
             </div>
-            <router-link :to="{ path: '/buyer/orders', query: { id: order.id }}" class="text-orange-500 hover:underline">
-              Xem chi tiết
-            </router-link>
+            <div class="mt-4">
+              <router-link
+                v-if="order.items.some(item => !item.reviewed)"
+                :to="{ path: `/buyer/orders/${order.id}/reviews` }"
+                class="text-orange-500 hover:underline"
+              >
+                Đánh giá đơn hàng
+              </router-link>
+              <router-link :to="{ path: '/buyer/orders', query: { id: order.id }}" class="text-orange-500 hover:underline ml-4">
+                Xem chi tiết
+              </router-link>
+            </div>
           </div>
         </div>
       </div>
@@ -110,7 +114,16 @@ export default {
       return this.orders.filter(order => ['processing', 'shipping'].includes(order.shipping_status));
     },
     completedOrders() {
-      return this.orders.filter(order => order.shipping_status === 'delivered');
+      return this.orders.map(order => ({
+        ...order,
+        items: order.items.map(item => ({
+          ...item,
+          reviewed: order.reviews.some(review => 
+            review.product_id === item.product_id && 
+            review.product_variant_id == item.product_variant_id
+          ),
+        })),
+      })).filter(order => order.shipping_status === 'delivered');
     },
   },
   async created() {
@@ -124,10 +137,27 @@ export default {
         const response = await axios.get('/buyer/orders', {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
-        this.orders = response.data.orders || [];
+        this.orders = response.data.orders.map(order => ({
+          ...order,
+          reviews: order.reviews || [], // Đảm bảo có trường reviews
+          items: order.items.map(item => ({
+            ...item,
+            product: item.product || { name: 'Sản phẩm', image_url: '' },
+            product_variant: item.product_variant || null,
+          })),
+        }));
       } catch (error) {
-        this.error = error.response?.data?.message || 'Lỗi tải đơn hàng.';
+        this.error = error.response?.data?.message || 'Lỗi tải đơn hàng';
         console.error('Error fetching orders:', error.response?.data || error);
+        if (error.response?.status === 401) {
+          this.error = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+          setTimeout(() => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('role');
+            localStorage.removeItem('loginType');
+            this.$router.push('/buyer/login');
+          }, 2000);
+        }
       } finally {
         this.loading = false;
       }

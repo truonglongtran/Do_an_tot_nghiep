@@ -64,7 +64,9 @@
           <tbody>
             <tr v-for="banner in banners" :key="banner.id">
               <td>{{ banner.title }}</td>
-              <td><img :src="banner.img_url" alt="Banner" /></td>
+              <td>
+                <img :src="getImageUrl(banner.img_url)" alt="Banner" @error="handleImageError" />
+              </td>
               <td>{{ banner.placements[0]?.location?.location_name || 'N/A' }}</td>
               <td>{{ banner.placements[0]?.display_order || 'N/A' }}</td>
               <td>{{ banner.placements[0]?.is_active ? 'Kích hoạt' : 'Không kích hoạt' }}</td>
@@ -102,7 +104,7 @@
           <div class="form-group">
             <label>Hình ảnh</label>
             <input type="file" accept="image/*" @change="editForm.image = $event.target.files[0]" />
-            <img v-if="editForm.img_url" :src="editForm.img_url" alt="Banner Preview" />
+            <img v-if="editForm.img_url" :src="getImageUrl(editForm.img_url)" alt="Banner Preview" @error="handleImageError" />
           </div>
           <div class="form-group">
             <label>Link</label>
@@ -183,6 +185,22 @@ export default {
       }
     };
 
+    const getImageUrl = (imgUrl) => {
+      if (!imgUrl) {
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      return `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+    };
+
+    const handleImageError = (event) => {
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+    };
+
     const addBanner = async () => {
       try {
         error.value = null;
@@ -196,7 +214,7 @@ export default {
         formData.append('location_id', form.value.location_id);
         formData.append('position', form.value.position);
 
-        const response = await axios.post('/seller/shop/banners', formData, {
+        const response = await axios.post('/seller/shop/decoration/banners', formData, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data',
@@ -243,8 +261,10 @@ export default {
         formData.append('status', editForm.value.status);
         formData.append('location_id', editForm.value.location_id);
         formData.append('position', editForm.value.position);
+        // Add _method for Laravel to treat as PUT
+        formData.append('_method', 'PUT');
 
-        const response = await axios.put(`/seller/shop/banners/${editForm.value.id}`, formData, {
+        const response = await axios.post(`/seller/shop/decoration/banners/${editForm.value.id}`, formData, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data',
@@ -276,7 +296,7 @@ export default {
         error.value = null;
         success.value = null;
         loading.value = true;
-        await axios.delete(`/seller/shop/banners/${deleteBannerId.value}`, {
+        await axios.delete(`/seller/shop/decoration/banners/${deleteBannerId.value}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
         banners.value = banners.value.filter(b => b.id !== deleteBannerId.value);
@@ -305,6 +325,8 @@ export default {
       loading,
       showEditModal,
       showDeleteConfirm,
+      getImageUrl,
+      handleImageError,
       addBanner,
       openEditModal,
       updateBanner,

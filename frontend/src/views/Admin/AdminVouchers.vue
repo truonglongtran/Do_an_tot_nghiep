@@ -509,10 +509,6 @@ export default {
         });
         this.products = response.data;
         console.log('Products loaded:', this.products);
-        if (!this.products.length) {
-          console.warn('Danh sách sản phẩm rỗng.');
-          alert('Không có sản phẩm nào trong hệ thống.');
-        }
       } catch (error) {
         console.error('Lỗi khi tải danh sách sản phẩm:', error);
         alert(`Không thể tải danh sách sản phẩm: ${error.response?.data?.message || error.message}`);

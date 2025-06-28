@@ -205,9 +205,7 @@ const routes = [
         component: () => import('@/views/Seller/SellerDashboard.vue'),
         meta: {
           roles: ['seller'],
-          permissions: {
-            seller: ['view'],
-          },
+          permissions: { seller: ['view'] },
         },
       },
       {
@@ -250,7 +248,7 @@ const routes = [
           permissions: { seller: ['view', 'update'] },
         },
       },
-     {
+      {
         path: 'products/add',
         component: () => import('@/views/Seller/SellerProductsAdd.vue'),
         meta: {
@@ -322,7 +320,7 @@ const routes = [
         },
       },
     ],
-  },  
+  },
   {
     path: '/',
     component: BuyerLayout,
@@ -399,22 +397,34 @@ const routes = [
         component: () => import('@/views/Buyer/OrderSuccess.vue'),
         meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
       },
-      { 
+      {
         path: 'buyer/profile',
-        name: 'ProfileEdit', 
+        name: 'ProfileEdit',
         component: () => import('@/views/Buyer/ProfileEdit.vue'),
         meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
       },
-      { 
-        path: '/buyer/order-tracking',
+      {
+        path: 'buyer/order-tracking',
         name: 'OrderTracking',
         component: () => import('@/views/Buyer/OrderTracking.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/orders/:order_id/reviews',
+        name: 'OrderReview',
+        component: () => import('@/views/Buyer/OrderReview.vue'),
         meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
       },
       {
         path: 'reviews',
         name: 'Reviews',
         component: () => import('@/views/Buyer/Reviews.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/reviews/create',
+        name: 'ReviewCreate',
+        component: () => import('@/views/Buyer/ReviewCreate.vue'),
         meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
       },
       {
@@ -455,15 +465,19 @@ router.beforeEach((to, from, next) => {
       return next('/admin/dashboard');
     } else if (loginType === 'seller') {
       return next('/seller/dashboard');
-    } else {
+    } else if (loginType === 'buyer') {
       return next('/');
     }
+    return next('/');
   }
 
   // Handle routes requiring authentication
   if (to.meta.requiresAuth) {
     if (!token || !role || !loginType) {
-      console.log('No token/role/loginType, redirecting to:', to.meta.loginPath || '/buyer/login');
+      console.log('Missing token, role, or loginType, redirecting to:', to.meta.loginPath || '/buyer/login');
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      localStorage.removeItem('loginType');
       return next(to.meta.loginPath || '/buyer/login');
     }
 
@@ -474,9 +488,10 @@ router.beforeEach((to, from, next) => {
         return next('/admin/dashboard');
       } else if (loginType === 'seller') {
         return next('/seller/dashboard');
-      } else {
+      } else if (loginType === 'buyer') {
         return next('/');
       }
+      return next('/');
     }
 
     // Check permissions if defined

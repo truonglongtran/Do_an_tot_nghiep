@@ -47,9 +47,9 @@ class User extends Authenticatable
         'avatar_url' => 'string',
     ];
 
-    public function shops()
+    public function shop()
     {
-        return $this->hasMany(Shop::class, 'owner_id');
+        return $this->hasOne(Shop::class, 'owner_id');
     }
 
     public function orders()

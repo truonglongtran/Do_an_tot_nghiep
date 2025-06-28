@@ -15,9 +15,16 @@
           @click="selectBuyer(conversation.buyer.id)"
         >
           <div class="buyer-info">
-            <h3>{{ conversation.buyer.username }}</h3>
-            <p class="last-message">{{ conversation.last_message?.content || 'Chưa có tin nhắn' }}</p>
-            <p class="timestamp">{{ formatDateTime(conversation.last_message?.created_at) }}</p>
+            <img
+              :src="conversation.buyer?.avatar_url || 'https://via.placeholder.com/50'"
+              alt="Buyer Avatar"
+              class="buyer-avatar"
+            />
+            <div class="buyer-details">
+              <h3>{{ conversation.buyer?.username || 'Người mua' }}</h3>
+              <p class="last-message">{{ conversation.last_message?.content || 'Chưa có tin nhắn' }}</p>
+              <p class="timestamp">{{ formatDateTime(conversation.last_message?.created_at) }}</p>
+            </div>
           </div>
           <div v-if="conversation.unread_count > 0" class="unread-badge">
             {{ conversation.unread_count }}
@@ -31,13 +38,22 @@
       <!-- Cửa sổ chat -->
       <div class="chat-window" v-if="selectedBuyerId">
         <div class="chat-header">
+          <img
+            :src="selectedBuyer?.avatar_url || 'https://via.placeholder.com/50'"
+            alt="Buyer Avatar"
+            class="buyer-avatar"
+          />
           <h3>{{ selectedBuyer?.username || 'Chọn một người mua để xem tin nhắn' }}</h3>
         </div>
         <div class="chat-messages" ref="chatMessages">
           <div
             v-for="(message, index) in selectedMessages"
-            :key="index"
-            :class="['message', message.sender_type === 'seller' ? 'sent' : 'received']"
+            :key="message.created_at"
+            class="message-bubble"
+            :class="{
+              'sent': message.sender_type === 'seller',
+              'received': message.sender_type === 'buyer'
+            }"
           >
             <p>{{ message.content }}</p>
             <span class="message-time">{{ formatDateTime(message.created_at) }}</span>
@@ -87,6 +103,7 @@ export default {
     const successMessage = ref('');
     const chatMessages = ref(null);
     const currentSellerId = ref(null);
+    const pollingInterval = ref(null);
 
     const fetchConversations = async () => {
       isLoading.value = true;
@@ -94,7 +111,6 @@ export default {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
-          console.error('No token found in localStorage');
           throw new Error('Không tìm thấy token');
         }
         console.log('Fetching conversations with token:', token);
@@ -106,7 +122,7 @@ export default {
         currentSellerId.value = response.data.data.current_seller_id;
         console.log('Conversations:', JSON.stringify(conversations.value, null, 2));
         console.log('Current Seller ID:', currentSellerId.value);
-        if (conversations.value.length === 0) {
+        if (conversations.length === 0) {
           console.warn('No conversations found for seller');
         }
       } catch (error) {
@@ -125,15 +141,20 @@ export default {
     const selectBuyer = async (buyerId) => {
       console.log('Selecting buyer with ID:', buyerId);
       if (!buyerId) {
-        console.warn('No buyerId provided');
         errorMessage.value = 'Vui lòng chọn một người mua để xem tin nhắn';
         selectedMessages.value = [];
         selectedBuyerId.value = null;
+        stopPolling();
         return;
       }
 
       selectedBuyerId.value = buyerId;
       errorMessage.value = '';
+      await fetchMessages(buyerId);
+      startPolling(buyerId);
+    };
+
+    const fetchMessages = async (buyerId) => {
       try {
         const token = localStorage.getItem('token');
         console.log('Fetching messages for buyerId:', buyerId, 'with token:', token);
@@ -156,7 +177,7 @@ export default {
       } catch (error) {
         console.error('Error fetching messages:', error.response?.data || error.message);
         errorMessage.value = error.response?.data?.message || 'Lỗi khi tải tin nhắn';
-        if (error.response?.status === 404 || error.response?.data?.message === 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!') {
+        if (error.response?.status === 404 && error.response?.data?.message === 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!') {
           errorMessage.value = 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!';
           selectedMessages.value = [];
         }
@@ -164,7 +185,7 @@ export default {
     };
 
     const sendMessage = async () => {
-      if (!newMessage.value.trim() || !selectedBuyerId.value) {
+      if (!newMessage.value.trim() || !selectedBuyerId.value || sending.value) {
         console.warn('Cannot send message: newMessage or selectedBuyerId is empty', {
           newMessage: newMessage.value,
           selectedBuyerId: selectedBuyerId.value,
@@ -194,8 +215,17 @@ export default {
         if (conversation) {
           conversation.last_message = response.data.data;
         } else {
+          const buyerResponse = await axios.get(`/seller/buyers?buyer_id=${selectedBuyerId.value}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          console.log('API response for buyer:', JSON.stringify(buyerResponse.data, null, 2));
+          const buyerData = buyerResponse.data.data.find(b => b.id === selectedBuyerId.value) || {
+            id: selectedBuyerId.value,
+            username: 'Unknown',
+            avatar_url: 'https://via.placeholder.com/50',
+          };
           conversations.value.push({
-            buyer: { id: selectedBuyerId.value, username: 'Unknown' },
+            buyer: { id: selectedBuyerId.value, username: buyerData.username, avatar_url: buyerData.avatar_url },
             last_message: response.data.data,
             unread_count: 0,
           });
@@ -208,9 +238,14 @@ export default {
         });
         successMessage.value = 'Tin nhắn đã được gửi';
         setTimeout(() => (successMessage.value = ''), 3000);
+        await fetchConversations();
       } catch (error) {
         console.error('Error sending message:', error.response?.data || error.message);
         errorMessage.value = error.response?.data?.message || 'Lỗi khi gửi tin nhắn';
+        if (error.response?.status === 401) {
+          localStorage.removeItem('token');
+          window.location.href = '/seller/login';
+        }
       } finally {
         sending.value = false;
       }
@@ -226,6 +261,24 @@ export default {
         console.log('Messages marked as read for buyerId:', buyerId);
       } catch (error) {
         console.error('Error marking messages as read:', error.response?.data || error.message);
+      }
+    };
+
+    const startPolling = (buyerId) => {
+      if (pollingInterval.value) {
+        clearInterval(pollingInterval.value);
+      }
+      pollingInterval.value = setInterval(() => {
+        if (selectedBuyerId.value === buyerId) {
+          fetchMessages(buyerId);
+        }
+      }, 5000);
+    };
+
+    const stopPolling = () => {
+      if (pollingInterval.value) {
+        clearInterval(pollingInterval.value);
+        pollingInterval.value = null;
       }
     };
 
@@ -252,7 +305,8 @@ export default {
     });
 
     onUnmounted(() => {
-      console.log('Component unmounted, resetting state');
+      console.log('Component unmounted, stopping polling');
+      stopPolling();
       selectedBuyerId.value = null;
       selectedMessages.value = [];
     });
@@ -287,7 +341,7 @@ export default {
 h2 {
   font-size: 24px;
   font-weight: bold;
-  color: #333;
+  color: #0288d1;
   margin-bottom: 20px;
 }
 .error-message {
@@ -312,6 +366,7 @@ h2 {
 .conversation-list {
   width: 300px;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
@@ -321,7 +376,7 @@ h2 {
   justify-content: space-between;
   align-items: center;
   padding: 15px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e5e7eb;
   cursor: pointer;
   transition: background-color 0.3s;
 }
@@ -332,24 +387,36 @@ h2 {
   background: #e3f2fd;
 }
 .buyer-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-grow: 1;
 }
-.buyer-info h3 {
+.buyer-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.buyer-details {
+  flex-grow: 1;
+}
+.buyer-details h3 {
   font-size: 16px;
   font-weight: 600;
   color: #333;
 }
 .last-message {
   font-size: 14px;
-  color: #555;
+  color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 180px;
 }
 .timestamp {
   font-size: 12px;
-  color: #888;
+  color: #9ca3af;
 }
 .unread-badge {
   background: #d32f2f;
@@ -362,64 +429,84 @@ h2 {
 .chat-window {
   flex-grow: 1;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
 }
 .chat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 15px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e5e7eb;
 }
 .chat-header h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: #0288d1;
 }
 .chat-messages {
   flex-grow: 1;
   padding: 15px;
   overflow-y: auto;
 }
-.message {
-  margin-bottom: 10px;
+.message-bubble {
+  margin-bottom: 15px;
   max-width: 70%;
+  width: fit-content;
+  display: flex;
+  flex-direction: column;
 }
-.message.sent {
+.message-bubble.sent {
   margin-left: auto;
-  text-align: right;
 }
-.message.received {
+.message-bubble.received {
   margin-right: auto;
-  text-align: left;
 }
-.message p {
-  background: #e3f2fd;
-  padding: 10px;
-  border-radius: 8px;
+.message-bubble p {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 12px;
   font-size: 14px;
-  color: #333;
+  margin: 0;
+  line-height: 1.4;
+  max-width: 100%;
+  word-wrap: break-word;
 }
-.message.sent p {
+.message-bubble.sent p {
   background: #0288d1;
   color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.message-bubble.received p {
+  background: #e3f2fd;
+  color: #333;
+  border-bottom-left-radius: 4px;
 }
 .message-time {
-  font-size: 12px;
-  color: #888;
-  margin-top: 5px;
-  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 6px;
+  text-align: inherit;
+}
+.message-bubble.sent .message-time {
+  text-align: right;
+}
+.message-bubble.received .message-time {
+  text-align: left;
 }
 .chat-input {
   display: flex;
   gap: 10px;
   padding: 15px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid #e5e7eb;
 }
 .chat-input input {
   flex-grow: 1;
   padding: 10px;
-  border: 1px solid #ccc;
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.3s;
@@ -466,6 +553,7 @@ h2 {
   align-items: center;
   justify-content: center;
   background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }

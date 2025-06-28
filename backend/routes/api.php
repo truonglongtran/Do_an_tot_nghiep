@@ -223,6 +223,7 @@ Route::prefix('buyer')->group(function () {
 
         Route::get('/reviews', [ReviewController::class, 'index']);
         Route::post('/reviews', [ReviewController::class, 'store']);
+        Route::get('/reviews/check-order/{orderId}', [ReviewController::class, 'checkOrderReviewStatus']);
 
         Route::post('/shops/{id}/follow', [ShopController::class, 'follow']);
         Route::delete('/shops/{id}/unfollow', [ShopController::class, 'unfollow']);

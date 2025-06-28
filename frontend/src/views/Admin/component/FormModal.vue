@@ -1,17 +1,37 @@
 <template>
-  <div
-    v-if="show"
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-  >
-    <div
-      class="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto"
-    >
+  <div v-if="show" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
       <h2 class="text-xl font-bold mb-4">{{ title }}</h2>
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <div v-for="field in fields" :key="field.name" class="mb-4" v-show="isFieldVisible(field)">
           <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+          <div v-if="field.type === 'file'" class="mt-1">
+            <input
+              type="file"
+              :accept="field.accept || 'image/*'"
+              @change="handleFileChange($event, field)"
+              :required="field.required && isFieldApplicable(field) && !isEdit"
+              :disabled="!isFieldApplicable(field)"
+              class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              :class="{ 'border-red-500': errors[field.name] && touched[field.name] }"
+            />
+            <img
+              v-if="form[field.name] && typeof form[field.name] === 'string' && isEdit"
+              :src="getImageUrl(form[field.name])"
+              alt="Preview"
+              class="mt-2 w-32 h-32 object-cover rounded"
+              @error="handleImageError($event, field)"
+            />
+            <img
+              v-else-if="previewUrl[field.name]"
+              :src="previewUrl[field.name]"
+              alt="Preview"
+              class="mt-2 w-32 h-32 object-cover rounded"
+              @error="handleImageError($event, field)"
+            />
+          </div>
           <input
-            v-if="['text', 'email', 'password', 'number', 'date', 'url', 'datetime-local'].includes(field.type)"
+            v-else-if="['text', 'email', 'password', 'number', 'date', 'url', 'datetime-local'].includes(field.type)"
             v-model="form[field.name]"
             :type="field.type"
             :placeholder="field.placeholder"
@@ -35,11 +55,7 @@
             <option v-if="field.placeholder" value="" disabled>
               {{ field.placeholder }}
             </option>
-            <option
-              v-for="option in field.options"
-              :key="option.value"
-              :value="option.value"
-            >
+            <option v-for="option in field.options" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
           </select>
@@ -62,10 +78,7 @@
             <template #noResult>{{ field.noResultText || 'Không tìm thấy kết quả' }}</template>
             <template #noOptions>{{ field.emptyOptionsText || 'Không có tùy chọn nào' }}</template>
           </multiselect>
-          <div
-            v-else-if="field.type === 'checkbox'"
-            class="mt-1 flex items-center"
-          >
+          <div v-else-if="field.type === 'checkbox'" class="mt-1 flex items-center">
             <input
               v-model="form[field.name]"
               type="checkbox"
@@ -75,15 +88,8 @@
             />
             <label class="ml-2 text-sm text-gray-700">{{ field.label }}</label>
           </div>
-          <div
-            v-else-if="field.type === 'checkbox-group'"
-            class="mt-1 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2"
-          >
-            <label
-              v-for="option in field.options"
-              :key="option.value"
-              class="flex items-center"
-            >
+          <div v-else-if="field.type === 'checkbox-group'" class="mt-1 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2">
+            <label v-for="option in field.options" :key="option.value" class="flex items-center">
               <input
                 type="checkbox"
                 :value="option.value"
@@ -95,16 +101,10 @@
               <span class="ml-2 text-sm text-gray-700">{{ option.label || 'N/A' }}</span>
             </label>
           </div>
-          <p
-            v-if="errors[field.name] && touched[field.name]"
-            class="text-red-500 text-sm mt-1"
-          >
+          <p v-if="errors[field.name] && touched[field.name]" class="text-red-500 text-sm mt-1">
             {{ errors[field.name] }}
           </p>
-          <p
-            v-else-if="field.type === 'multiselect' && field.options && !field.options.length"
-            class="text-red-500 text-sm mt-1"
-          >
+          <p v-else-if="field.type === 'multiselect' && field.options && !field.options.length" class="text-red-500 text-sm mt-1">
             {{ field.emptyOptionsText || 'Không có tùy chọn nào' }}
           </p>
         </div>
@@ -119,7 +119,7 @@
           <button
             type="submit"
             class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            :disabled="isSubmitting"
+            :disabled="isSubmitting || hasErrors"
           >
             {{ isEdit ? 'Cập nhật' : modalMode === 'delete' ? 'Xác nhận' : 'Thêm' }}
           </button>
@@ -149,18 +149,19 @@ export default {
       errors: {},
       touched: {},
       isSubmitting: false,
+      previewUrl: {},
     };
   },
   computed: {
     hasErrors() {
-      return Object.values(this.errors).some(error => error && this.touched[this.errors.key]);
+      return Object.keys(this.errors).some(key => this.errors[key] && this.touched[key]);
     },
   },
   watch: {
     initialData: {
       immediate: true,
       handler(newData) {
-        console.log('FormModal: Initializing with data:', newData, 'isEdit:', this.isEdit);
+        console.log('FormModal: Khởi tạo với dữ liệu:', newData, 'isEdit:', this.isEdit);
         this.initializeForm(newData);
       },
     },
@@ -168,7 +169,7 @@ export default {
       immediate: true,
       handler(newFields) {
         if (newFields && newFields.length) {
-          console.log('FormModal: Fields updated, reinitializing form');
+          console.log('FormModal: Cập nhật trường, khởi tạo lại biểu mẫu');
           this.initializeForm(this.initialData);
         }
       },
@@ -176,12 +177,18 @@ export default {
   },
   methods: {
     initializeForm(data) {
-      console.log('FormModal: Initializing form with data:', data);
+      console.log('FormModal: Khởi tạo biểu mẫu với dữ liệu:', data);
       const formData = {};
       this.errors = {};
       this.touched = {};
+      this.previewUrl = {};
       this.fields.forEach((field) => {
-        if (field.type === 'multiselect') {
+        if (field.type === 'file') {
+          formData[field.name] = (data && data[field.name]) || '';
+          if (data[field.name]) {
+            this.previewUrl[field.name] = this.getImageUrl(data[field.name]);
+          }
+        } else if (field.type === 'multiselect') {
           formData[field.name] = (data && data[field.name]) || field.defaultValue || [];
         } else if (field.type === 'checkbox-group') {
           formData[field.name] = (data && data[field.name]) || field.defaultValue || [];
@@ -194,29 +201,81 @@ export default {
             ? data[field.name]
             : field.defaultValue || '';
         }
-        // Do not validate during initialization
       });
       this.form = { ...formData };
-      console.log('FormModal: Form initialized:', this.form);
+      console.log('FormModal: Biểu mẫu đã khởi tạo:', this.form);
+    },
+    getImageUrl(imgUrl) {
+      console.log('Đường dẫn ảnh đầu vào:', imgUrl);
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử Roselle sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+
+      // Xử lý URL bên ngoài (bắt đầu bằng http:// hoặc https://)
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
+      }
+
+      // Xử lý đường dẫn cục bộ (ví dụ: /storage/banners/56.png hoặc banners/56.png)
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, ''); // Loại bỏ /storage/ hoặc /
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
+    handleFileChange(event, field) {
+      const file = event.target.files[0];
+      this.touched[field.name] = true;
+      if (file) {
+        const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!validImageTypes.includes(file.type)) {
+          this.errors[field.name] = 'Vui lòng chọn file ảnh (JPEG, PNG, GIF hoặc WEBP).';
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          this.errors[field.name] = 'Kích thước file không được vượt quá 5MB.';
+          return;
+        }
+        this.form[field.name] = file;
+        this.previewUrl[field.name] = URL.createObjectURL(file);
+        this.errors[field.name] = '';
+      } else {
+        this.form[field.name] = '';
+        this.previewUrl[field.name] = '';
+        this.errors[field.name] = field.required && !this.isEdit ? `${field.label} là bắt buộc.` : '';
+      }
+      this.validateField(field);
+    },
+    handleImageError(event, field) {
+      console.error('Lỗi tải ảnh:', {
+        field_label: field.label,
+        img_url: this.form[field.name] || this.previewUrl[field.name],
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
     },
     touchField(field) {
       this.touched[field.name] = true;
     },
     isFieldApplicable(field) {
-      if (field.name === 'shop_ids') return this.form.voucher_type === 'shop';
-      if (field.name === 'product_ids') return this.form.voucher_type === 'product';
-      if (field.name === 'shipping_partner_ids' || field.name === 'shipping_only') return this.form.voucher_type === 'shipping';
       return true;
     },
     isFieldVisible(field) {
-      return this.isFieldApplicable(field) || ['code', 'voucher_type', 'discount_type', 'discount_value', 'min_order_amount', 'usage_limit', 'start_date', 'end_date'].includes(field.name);
+      return this.isFieldApplicable(field);
     },
     validateField(field) {
-      if (!this.touched[field.name] && !this.isSubmitting) return; // Skip validation if not touched or submitting
+      if (!this.touched[field.name] && !this.isSubmitting) return;
       const value = this.form[field.name];
       this.errors[field.name] = '';
 
       if (field.required && this.isFieldApplicable(field)) {
+        if (field.type === 'file' && (!value || (typeof value === 'string' && !value) && !this.isEdit)) {
+          this.errors[field.name] = `${field.label} là bắt buộc.`;
+          return;
+        }
         if (field.type === 'multiselect' && (!value || !value.length)) {
           this.errors[field.name] = `Vui lòng chọn ít nhất một ${field.label.toLowerCase()}.`;
           return;
@@ -225,7 +284,7 @@ export default {
           this.errors[field.name] = `Vui lòng chọn ít nhất một ${field.label.toLowerCase()}.`;
           return;
         }
-        if (field.type !== 'multiselect' && field.type !== 'checkbox-group' && (!value && value !== 0)) {
+        if (field.type !== 'file' && field.type !== 'multiselect' && field.type !== 'checkbox-group' && (!value && value !== 0)) {
           this.errors[field.name] = `${field.label} là bắt buộc.`;
           return;
         }
@@ -241,31 +300,39 @@ export default {
       }
     },
     handleSubmit() {
-      console.log('FormModal: Submitting form:', this.form);
+      console.log('FormModal: Gửi biểu mẫu:', this.form);
       this.isSubmitting = true;
       let valid = true;
       this.fields.forEach(field => {
-        this.touched[field.name] = true; // Mark all fields as touched on submit
+        this.touched[field.name] = true;
         this.validateField(field);
         if (this.errors[field.name]) valid = false;
       });
 
       if (!valid) {
         this.isSubmitting = false;
-        console.log('FormModal: Validation errors:', this.errors);
+        console.log('FormModal: Lỗi xác thực:', this.errors);
+        alert('Vui lòng kiểm tra các lỗi trong biểu mẫu.');
         return;
       }
 
-      const payload = { ...this.form };
+      const formData = new FormData();
+      this.fields.forEach(field => {
+        if (field.type === 'file' && this.form[field.name] instanceof File) {
+          formData.append(field.name, this.form[field.name]);
+        } else if (field.type === 'multiselect' || field.type === 'checkbox-group') {
+          formData.append(field.name, JSON.stringify(this.form[field.name]));
+        } else {
+          formData.append(field.name, this.form[field.name] || '');
+        }
+      });
 
-      if (payload.voucher_type !== 'shop') delete payload.shop_ids;
-      if (payload.voucher_type !== 'product') delete payload.product_ids;
-      if (payload.voucher_type !== 'shipping') {
-        delete payload.shipping_partner_ids;
-        delete payload.shipping_only;
+      // Ghi log FormData để kiểm tra
+      for (let [key, value] of formData.entries()) {
+        console.log(`FormData: ${key} = ${value instanceof File ? value.name : value}`);
       }
 
-      this.$emit('submit', payload);
+      this.$emit('submit', formData);
       this.isSubmitting = false;
     },
   },
@@ -273,13 +340,19 @@ export default {
 </script>
 
 <style scoped>
-.max-h-[80vh] { max-height: 80vh; }
-.max-h-48 { max-height: 12rem; }
+.max-h-\[80vh\] {
+  max-height: 80vh;
+}
+.max-h-48 {
+  max-height: 12rem;
+}
 .overflow-y-auto {
   scrollbar-width: thin;
   scrollbar-color: #9ca3af #f1f5f9;
 }
-.overflow-y-auto::-webkit-scrollbar { width: 8px; }
+.overflow-y-auto::-webkit-scrollbar {
+  width: 8px;
+}
 .overflow-y-auto::-webkit-scrollbar-track {
   background: #f1f5f9;
   border-radius: 4px;
@@ -288,5 +361,7 @@ export default {
   background: #9ca3af;
   border-radius: 4px;
 }
-.overflow-y-auto::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
 </style>

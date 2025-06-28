@@ -18,7 +18,7 @@ class MessageController extends Controller
 
         try {
             $messages = Message::where('buyer_id', $buyer->id)
-                ->with('seller:id,username,avatar_url')
+                ->with(['seller.shop']) // Load the shop relationship
                 ->orderBy('last_message_at', 'desc')
                 ->get()
                 ->map(function ($message) {
@@ -27,9 +27,13 @@ class MessageController extends Controller
                     return [
                         'seller' => [
                             'id' => $message->seller->id,
-                            'username' => $message->seller->username ?? 'Shop',
+                            'username' => $message->seller->username ?? 'Shop', // Keep for compatibility
                             'avatar_url' => $message->seller->avatar_url ?? 'https://via.placeholder.com/50',
                         ],
+                        'shop' => $message->seller->shop ? [ // Add shop data
+                            'shop_name' => $message->seller->shop->shop_name,
+                            'avatar_url' => $message->seller->shop->avatar_url ?? $message->seller->avatar_url,
+                        ] : null,
                         'last_message' => $lastMessage ? [
                             'content' => $lastMessage['content'],
                             'created_at' => $lastMessage['created_at'],
@@ -84,7 +88,7 @@ class MessageController extends Controller
 
         try {
             // Kiểm tra seller_id hợp lệ
-            $seller = User::where('id', $sellerId)->where('role', 'seller')->first();
+            $seller = User::where('id', $sellerId)->where('role', 'seller')->with('shop')->first();
             if (!$seller) {
                 Log::warning('Invalid seller_id', [
                     'buyer_id' => $buyer->id,
@@ -129,6 +133,18 @@ class MessageController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!',
+                    'data' => [
+                        'seller' => [
+                            'id' => $seller->id,
+                            'username' => $seller->username ?? 'Shop',
+                            'avatar_url' => $seller->avatar_url ?? 'https://via.placeholder.com/50',
+                        ],
+                        'shop' => $seller->shop ? [
+                            'shop_name' => $seller->shop->shop_name,
+                            'avatar_url' => $seller->shop->avatar_url ?? $seller->avatar_url,
+                        ] : null,
+                        'messages' => [],
+                    ],
                 ], 404);
             }
 
@@ -142,6 +158,15 @@ class MessageController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
+                    'seller' => [
+                        'id' => $seller->id,
+                        'username' => $seller->username ?? 'Shop',
+                        'avatar_url' => $seller->avatar_url ?? 'https://via.placeholder.com/50',
+                    ],
+                    'shop' => $seller->shop ? [
+                        'shop_name' => $seller->shop->shop_name,
+                        'avatar_url' => $seller->shop->avatar_url ?? $seller->avatar_url,
+                    ] : null,
                     'messages' => $message->messages ?? [],
                 ],
             ], 200);
@@ -176,7 +201,7 @@ class MessageController extends Controller
 
         try {
             // Kiểm tra receiver_id là seller
-            $seller = User::where('id', $sellerId)->where('role', 'seller')->first();
+            $seller = User::where('id', $sellerId)->where('role', 'seller')->with('shop')->first();
             if (!$seller) {
                 Log::warning('Invalid receiver_id', [
                     'buyer_id' => $buyer->id,
@@ -331,7 +356,21 @@ class MessageController extends Controller
     public function getSellers(Request $request)
     {
         try {
-            $sellers = User::where('role', 'seller')->select('id', 'username', 'avatar_url')->get();
+            $sellers = User::where('role', 'seller')
+                ->with('shop') // Load shop relationship
+                ->select('id', 'username', 'avatar_url')
+                ->get()
+                ->map(function ($seller) {
+                    return [
+                        'id' => $seller->id,
+                        'username' => $seller->username,
+                        'avatar_url' => $seller->avatar_url,
+                        'shop' => $seller->shop ? [
+                            'shop_name' => $seller->shop->shop_name,
+                            'avatar_url' => $seller->shop->avatar_url ?? $seller->avatar_url,
+                        ] : null,
+                    ];
+                });
             Log::info('Fetching sellers', ['seller_count' => $sellers->count()]);
             return response()->json([
                 'success' => true,
@@ -346,4 +385,3 @@ class MessageController extends Controller
         }
     }
 }
-?>

@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
     libpng-dev libjpeg-dev libfreetype6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Cài đặt các PHP extensions (cài đặt tokenizer trước)
+# Cài đặt các PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mbstring xml gd
 
 # Cài đặt Composer
@@ -18,15 +18,16 @@ WORKDIR /var/www
 # Copy mã nguồn Laravel vào container
 COPY . .
 
-# Cài đặt dependencies của Laravel
-RUN composer install
+# Cài đặt dependencies, publish Sanctum, chạy storage:link và đặt quyền
+RUN composer install && \
+    php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider" --force && \
+    rm -f /var/www/public/storage && \
+    php artisan storage:link && \
+    chown -R www-data:www-data /var/www/storage /var/www/public && \
+    chmod -R 775 /var/www/storage /var/www/public
 
-# Publish Sanctum config + migrate (nếu database ready)
-RUN php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider" --force
-
-
-# Expose port cho Laravel (8000)
+# Expose port cho Laravel
 EXPOSE 8000
 
-# Command chạy Laravel (sử dụng PHP-FPM)
-CMD ["php-fpm"]
+# Command chạy Laravel
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
