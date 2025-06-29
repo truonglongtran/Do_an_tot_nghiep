@@ -1,4 +1,3 @@
-<!-- src/views/Buyer/Orders.vue -->
 <template>
   <div class="container mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold text-orange-500 mb-4">Đơn hàng</h1>
@@ -25,9 +24,10 @@
           <p class="text-gray-600 font-semibold">Sản phẩm:</p>
           <div v-for="item in order.items" :key="item.id" class="flex items-center space-x-2 mt-1">
             <img
-              :src="item.product_variant?.image_url || item.product?.image_url || 'https://via.placeholder.com/50'"
+              :src="getImageUrl(item.product_variant?.image_url || item.product?.image_url || 'https://via.placeholder.com/50')"
               :alt="item.product?.name || 'Sản phẩm'"
               class="w-12 h-12 object-cover rounded"
+              @error="handleImageError($event, item.product_variant?.image_url || item.product?.image_url, 'order_item_' + item.id)"
             />
             <div>
               <p class="text-gray-600">{{ item.product?.name || 'Sản phẩm' }}</p>
@@ -66,6 +66,29 @@ export default {
     await this.fetchOrders();
   },
   methods: {
+    getImageUrl(imgUrl) {
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
+    handleImageError(event, imgUrl, type) {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        img_url: imgUrl,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
+    },
     async fetchOrders() {
       this.loading = true;
       this.error = null;

@@ -16,9 +16,10 @@
         >
           <div class="buyer-info">
             <img
-              :src="conversation.buyer?.avatar_url || 'https://via.placeholder.com/50'"
-              alt="Buyer Avatar"
+              :src="getImageUrl(conversation.buyer?.avatar_url)"
+              :alt="conversation.buyer?.username || 'Người mua'"
               class="buyer-avatar"
+              @error="handleImageError($event, conversation.buyer?.avatar_url, 'buyer_avatar_' + conversation.buyer.id)"
             />
             <div class="buyer-details">
               <h3>{{ conversation.buyer?.username || 'Người mua' }}</h3>
@@ -39,9 +40,10 @@
       <div class="chat-window" v-if="selectedBuyerId">
         <div class="chat-header">
           <img
-            :src="selectedBuyer?.avatar_url || 'https://via.placeholder.com/50'"
-            alt="Buyer Avatar"
+            :src="getImageUrl(selectedBuyer?.avatar_url)"
+            :alt="selectedBuyer?.username || 'Người mua'"
             class="buyer-avatar"
+            @error="handleImageError($event, selectedBuyer?.avatar_url, 'buyer_avatar_' + selectedBuyer?.id)"
           />
           <h3>{{ selectedBuyer?.username || 'Chọn một người mua để xem tin nhắn' }}</h3>
         </div>
@@ -222,7 +224,7 @@ export default {
           const buyerData = buyerResponse.data.data.find(b => b.id === selectedBuyerId.value) || {
             id: selectedBuyerId.value,
             username: 'Unknown',
-            avatar_url: 'https://via.placeholder.com/50',
+            avatar_url: null,
           };
           conversations.value.push({
             buyer: { id: selectedBuyerId.value, username: buyerData.username, avatar_url: buyerData.avatar_url },
@@ -282,6 +284,31 @@ export default {
       }
     };
 
+    const getImageUrl = (imgUrl) => {
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    };
+
+    const handleImageError = (event, imgUrl, type) => {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        img_url: imgUrl,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
+    };
+
     const formatDateTime = (date) => {
       if (!date) return 'N/A';
       return new Date(date).toLocaleString('vi-VN', {
@@ -324,6 +351,8 @@ export default {
       currentSellerId,
       selectBuyer,
       sendMessage,
+      getImageUrl,
+      handleImageError,
       formatDateTime,
       selectedBuyer,
     };

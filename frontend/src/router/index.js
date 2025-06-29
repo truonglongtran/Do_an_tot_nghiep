@@ -3,6 +3,8 @@ import Login from '../views/Login/Login.vue';
 import AdminLayout from '../views/Admin/AdminLayout.vue';
 import SellerLayout from '../views/Seller/SellerLayout.vue';
 import BuyerLayout from '../views/Buyer/BuyerLayout.vue';
+import BuyerRegister from '../views/Buyer/BuyerRegister.vue';
+import SellerRegister from '../views/Seller/SellerRegister.vue';
 
 const routes = [
   {
@@ -20,6 +22,17 @@ const routes = [
     path: '/buyer/login',
     name: 'BuyerLogin',
     component: Login,
+  },
+  {
+    path: '/buyer/register',
+    name: 'BuyerRegister',
+    component: BuyerRegister,
+    meta: { requiresGuest: true },
+  },
+  {
+    path: '/seller/register',
+    name: 'SellerRegister',
+    component: SellerRegister,
   },
   {
     path: '/admin',

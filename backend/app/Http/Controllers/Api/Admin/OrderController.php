@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
@@ -17,7 +18,8 @@ class OrderController extends Controller
                 'seller' => fn($q) => $q->select('id', 'email'),
                 'items.product' => fn($q) => $q->select('id', 'name'),
                 'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
-            ])->paginate($perPage);
+            ])->select('id', 'buyer_id', 'seller_id', 'total', 'settled_status', 'shipping_status', 'order_status', 'created_at')
+                ->paginate($perPage);
 
             Log::info('Orders fetched', [
                 'order_count' => $orders->total(),
@@ -26,7 +28,7 @@ class OrderController extends Controller
                 'orders' => $orders->map(function ($order) {
                     return [
                         'id' => $order->id,
-                        'total_amount' => $order->total_amount,
+                        'total' => $order->total, // Changed from total_amount to total
                         'item_count' => $order->items->count(),
                         'items' => $order->items->map(function ($item) {
                             return [
@@ -61,7 +63,9 @@ class OrderController extends Controller
                 'seller' => fn($q) => $q->select('id', 'email'),
                 'items.product' => fn($q) => $q->select('id', 'name'),
                 'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
-            ])->findOrFail($id);
+            ])->select('id', 'buyer_id', 'seller_id', 'total', 'settled_status', 'shipping_status', 'order_status', 'created_at')
+                ->findOrFail($id);
+
             return response()->json($order);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['error' => 'Order not found'], 404);
@@ -88,7 +92,12 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Cập nhật trạng thái thanh toán thành công',
-                'order' => $order->load(['buyer', 'seller', 'items.product', 'items.productVariant'])
+                'order' => $order->load([
+                    'buyer' => fn($q) => $q->select('id', 'email'),
+                    'seller' => fn($q) => $q->select('id', 'email'),
+                    'items.product' => fn($q) => $q->select('id', 'name'),
+                    'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+                ])
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation Error in Settled Status', ['errors' => $e->errors(), 'payload' => $request->all()]);
@@ -121,7 +130,12 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Cập nhật trạng thái vận chuyển thành công',
-                'order' => $order->load(['buyer', 'seller', 'items.product', 'items.productVariant'])
+                'order' => $order->load([
+                    'buyer' => fn($q) => $q->select('id', 'email'),
+                    'seller' => fn($q) => $q->select('id', 'email'),
+                    'items.product' => fn($q) => $q->select('id', 'name'),
+                    'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+                ])
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation Error in Shipping Status', ['errors' => $e->errors(), 'payload' => $request->all()]);
@@ -154,7 +168,12 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Cập nhật trạng thái đơn hàng thành công',
-                'order' => $order->load(['buyer', 'seller', 'items.product', 'items.productVariant'])
+                'order' => $order->load([
+                    'buyer' => fn($q) => $q->select('id', 'email'),
+                    'seller' => fn($q) => $q->select('id', 'email'),
+                    'items.product' => fn($q) => $q->select('id', 'name'),
+                    'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+                ])
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation Error in Order Status', ['errors' => $e->errors(), 'payload' => $request->all()]);

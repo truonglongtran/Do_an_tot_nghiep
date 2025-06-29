@@ -40,9 +40,10 @@
               class="h-5 w-5 text-orange-500"
             />
             <img
-              :src="cart.product_variant?.image_url || 'https://via.placeholder.com/100'"
+              :src="getImageUrl(cart.product_variant?.image_url || 'https://via.placeholder.com/100')"
               :alt="cart.product_variant?.product?.name || 'Sản phẩm không xác định'"
               class="w-20 h-20 object-cover rounded"
+              @error="handleImageError($event, cart.product_variant?.image_url, 'cart_' + cart.id)"
             />
             <div class="flex-1">
               <p class="font-semibold">{{ cart.product_variant?.product?.name || 'Sản phẩm không xác định' }}</p>
@@ -199,6 +200,29 @@ export default {
     document.removeEventListener('click', this.closePriceDetails);
   },
   methods: {
+    getImageUrl(imgUrl) {
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/100?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
+    handleImageError(event, imgUrl, type) {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        img_url: imgUrl,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/100?text=Ảnh+Không+Tìm+Thấy';
+    },
     async fetchCart() {
       this.loading = true;
       this.error = null;

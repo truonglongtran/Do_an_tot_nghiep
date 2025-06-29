@@ -1,4 +1,3 @@
-<!-- src/views/Buyer/ProfileEdit.vue -->
 <template>
   <div class="container mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold text-orange-500 mb-6">Thông tin cá nhân</h1>
@@ -27,9 +26,10 @@
         <div v-if="!isEditing" class="space-y-4">
           <div class="flex items-center space-x-4">
             <img
-              :src="form.avatar_url || 'https://via.placeholder.com/100'"
+              :src="avatarUrlWithCacheBust"
               alt="Avatar"
               class="w-20 h-20 rounded-full object-cover"
+              @error="handleImageError"
             />
             <div>
               <p class="text-sm font-medium text-gray-700">Ảnh đại diện</p>
@@ -52,9 +52,10 @@
           <!-- Avatar Upload -->
           <div class="flex items-center space-x-4">
             <img
-              :src="form.avatar_url || 'https://via.placeholder.com/100'"
+              :src="avatarUrlWithCacheBust"
               alt="Avatar"
               class="w-20 h-20 rounded-full object-cover"
+              @error="handleImageError"
             />
             <div>
               <label class="block text-sm font-medium text-gray-700">Ảnh đại diện</label>
@@ -143,14 +144,51 @@ export default {
         avatar_url: '',
         avatar_file: null,
       },
-      originalForm: null, // Lưu trạng thái ban đầu để hủy chỉnh sửa
+      previewUrl: null,
+      originalForm: null,
       loading: true,
       saving: false,
       error: null,
       isEditing: false,
+      cacheBuster: Date.now(),
     };
   },
+  computed: {
+    apiBaseUrl() {
+      return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+    },
+    storageBaseUrl() {
+      return import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+    },
+    avatarUrlWithCacheBust() {
+      // Use previewUrl for selected file
+      if (this.previewUrl) {
+        console.log('Using preview URL for avatar:', this.previewUrl);
+        return this.previewUrl;
+      }
+      // Handle server-provided avatar_url
+      if (!this.form.avatar_url) {
+        console.warn('No avatar_url, using placeholder');
+        return 'https://via.placeholder.com/100';
+      }
+      // Handle external URLs
+      if (/^https?:\/\//.test(this.form.avatar_url)) {
+        console.log('Using external avatar URL:', this.form.avatar_url);
+        return `${this.form.avatar_url}?t=${this.cacheBuster}`;
+      }
+      // Handle local storage URLs
+      let cleanUrl = this.form.avatar_url;
+      while (cleanUrl.startsWith('/storage/') || cleanUrl.startsWith('storage/')) {
+        cleanUrl = cleanUrl.replace(/^\/?storage\//, '');
+      }
+      const finalUrl = `${this.storageBaseUrl}/${cleanUrl}?t=${this.cacheBuster}`;
+      console.log('Constructed avatar URL:', finalUrl);
+      return finalUrl;
+    },
+  },
   async created() {
+    console.log('VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+    console.log('VITE_STORAGE_BASE_URL:', import.meta.env.VITE_STORAGE_BASE_URL);
     await this.fetchProfile();
   },
   methods: {
@@ -158,12 +196,19 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const response = await axios.get('/buyer/user', {
+        const response = await axios.get(`${this.apiBaseUrl}/buyer/user`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
         const { username, email, phone_number, avatar_url } = response.data.data;
-        this.form = { username, email, phone_number, avatar_url, avatar_file: null };
-        this.originalForm = { ...this.form }; // Lưu trạng thái ban đầu
+        this.form = { username, email, phone_number, avatar_url: avatar_url || '', avatar_file: null };
+        this.originalForm = { ...this.form };
+        this.previewUrl = null; // Reset preview
+        console.log('Profile fetched:', { username, email, phone_number, avatar_url });
+        if (!avatar_url) {
+          console.warn('No avatar_url provided by API, using placeholder');
+        } else {
+          console.log('Attempting to load avatar:', this.avatarUrlWithCacheBust);
+        }
       } catch (err) {
         this.error = err.response?.data?.message || 'Lỗi tải thông tin cá nhân.';
         console.error('Error fetching profile:', err.response?.data || err);
@@ -175,7 +220,25 @@ export default {
       const file = event.target.files[0];
       if (file) {
         this.form.avatar_file = file;
-        this.form.avatar_url = URL.createObjectURL(file);
+        this.previewUrl = URL.createObjectURL(file);
+        console.log('Avatar selected:', file.name, 'Preview URL:', this.previewUrl);
+      } else {
+        this.previewUrl = null;
+      }
+    },
+    handleImageError(event) {
+      console.error('Avatar load error:', {
+        src: event.target.src,
+        userId: this.form.user_id || 'unknown',
+        error: 'Image failed to load, reverting to placeholder',
+        avatarUrl: this.form.avatar_url,
+        previewUrl: this.previewUrl,
+        constructedUrl: this.avatarUrlWithCacheBust,
+        apiBaseUrl: this.apiBaseUrl,
+        storageBaseUrl: this.storageBaseUrl,
+      });
+      if (event.target.src !== 'https://via.placeholder.com/100') {
+        event.target.src = 'https://via.placeholder.com/100';
       }
     },
     async updateProfile() {
@@ -190,9 +253,10 @@ export default {
         }
         if (this.form.avatar_file) {
           formData.append('avatar', this.form.avatar_file);
+          console.log('Uploading avatar:', this.form.avatar_file.name);
         }
 
-        const response = await axios.post('/buyer/user/update', formData, {
+        const response = await axios.post(`${this.apiBaseUrl}/buyer/user`, formData, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data',
@@ -205,12 +269,23 @@ export default {
         localStorage.setItem('avatar_url', response.data.user.avatar_url);
         if (response.data.user.phone_number) {
           localStorage.setItem('phone_number', response.data.user.phone_number);
+        } else {
+          localStorage.removeItem('phone_number');
         }
 
-        // Phát sự kiện cập nhật
-        this.$emit('update:user', response.data.user);
-        this.originalForm = { ...response.data.user, avatar_file: null }; // Cập nhật trạng thái gốc
-        this.isEditing = false; // Thoát chế độ chỉnh sửa
+        // Cập nhật form và originalForm
+        this.form = {
+          username: response.data.user.username,
+          email: response.data.user.email,
+          phone_number: response.data.user.phone_number,
+          avatar_url: response.data.user.avatar_url || '',
+          avatar_file: null,
+        };
+        this.originalForm = { ...this.form };
+        this.previewUrl = null; // Reset preview after upload
+        this.cacheBuster = Date.now();
+        this.isEditing = false;
+        console.log('Profile updated:', response.data.user);
         alert('Cập nhật thông tin thành công!');
       } catch (error) {
         this.error = error.response?.data?.message || 'Lỗi cập nhật thông tin.';
@@ -220,7 +295,8 @@ export default {
       }
     },
     cancelEdit() {
-      this.form = { ...this.originalForm, avatar_file: null }; // Khôi phục trạng thái ban đầu
+      this.form = { ...this.originalForm, avatar_file: null };
+      this.previewUrl = null;
       this.isEditing = false;
       this.error = null;
     },

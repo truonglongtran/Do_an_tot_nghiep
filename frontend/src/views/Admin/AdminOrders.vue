@@ -35,7 +35,7 @@
           <td class="px-4 py-2 border text-center">{{ (currentPage - 1) * perPage + index + 1 }}</td>
           <td class="px-4 py-2 border text-center">{{ order.buyer?.email || 'N/A' }}</td>
           <td class="px-4 py-2 border text-center">{{ order.seller?.email || 'N/A' }}</td>
-          <td class="px-4 py-2 border text-center">{{ formatCurrency(order.total_amount) }}</td>
+          <td class="px-4 py-2 border text-center">{{ formatCurrency(order.total) }}</td>
           <td class="px-4 py-2 border text-center">
             <select
               v-if="hasPermission('updateStatus')"
@@ -201,7 +201,7 @@ export default {
         { label: 'Người bán', key: 'seller.email', type: 'text' },
         {
           label: 'Tổng tiền',
-          key: 'total_amount',
+          key: 'total', // Changed from total_amount to total
           type: 'custom',
           customFormat: (value) => this.formatCurrency(value),
         },

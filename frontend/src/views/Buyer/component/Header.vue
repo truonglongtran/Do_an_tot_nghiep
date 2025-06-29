@@ -98,11 +98,12 @@
                 @click="openChatModal(chat)"
               >
                 <img
-                  :src="chat.shop?.avatar_url || 'https://via.placeholder.com/50'"
+                  :src="getImageUrl(chat.shop?.avatar_url)"
                   :alt="chat.shop?.shop_name || 'Shop'"
                   class="w-10 h-10 rounded-full object-cover"
+                  @error="handleImageError($event, chat.shop?.avatar_url, 'chat_avatar')"
                 />
-                <div class="flex-1">
+                <div class="flex-1 chat-message-container">
                   <p class="text-sm font-semibold truncate">{{ chat.shop?.shop_name || 'Shop' }}</p>
                   <p class="text-gray-600 text-xs truncate">{{ chat.last_message?.content || 'Chưa có tin nhắn' }}</p>
                   <p class="text-gray-500 text-xs">{{ formatDate(chat.last_message?.created_at) }}</p>
@@ -143,9 +144,10 @@
             <div v-else class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
               <div v-for="cart in carts" :key="cart.id" class="flex items-center space-x-2">
                 <img
-                  :src="cart.product_variant?.image_url || cart.product?.image_url || 'https://via.placeholder.com/50'"
+                  :src="getImageUrl(cart.product_variant?.image_url || cart.product?.image_url)"
                   :alt="cart.product_variant?.product?.name || cart.product?.name || 'Sản phẩm'"
                   class="w-10 h-10 object-cover rounded"
+                  @error="handleImageError($event, cart.product_variant?.image_url || cart.product?.image_url, 'cart_image')"
                 />
                 <div class="flex-1">
                   <p class="text-sm font-semibold truncate">{{ cart.product_variant?.product?.name || cart.product?.name || 'Sản phẩm' }}</p>
@@ -208,15 +210,18 @@
         </router-link>
 
         <!-- Seller Channel -->
-        <a href="/seller" class="text-gray-600 hover:text-orange-500">Kênh người bán</a>
+        <router-link :to="sellerLink" class="text-gray-600 hover:text-orange-500">
+          Kênh người bán
+        </router-link>
 
         <!-- User Section (Logged In) -->
         <div v-if="isLoggedInComputed" class="relative group" @mouseenter="setActiveModal('user')" @mouseleave="clearActiveModal">
           <div class="flex items-center space-x-2 cursor-pointer">
             <img
-              :src="user.avatar_url || 'https://via.placeholder.com/50'"
+              :src="getImageUrl(user.avatar_url)"
               alt="Avatar"
               class="w-8 h-8 rounded-full"
+              @error="handleImageError($event, user.avatar_url, 'user_avatar')"
             />
             <span class="text-gray-600 truncate max-w-[150px]">{{ user.username || 'Người dùng' }}</span>
           </div>
@@ -252,78 +257,12 @@
         </div>
       </div>
     </div>
-
-    <!-- Chat Modal -->
-    <div
-      v-if="activeModal === 'chat'"
-      class="fixed bottom-4 right-4 w-80 bg-white border rounded-lg shadow-lg z-[70] flex flex-col"
-      style="height: 400px;"
-    >
-      <div class="flex items-center justify-between p-3 border-b bg-orange-500 text-white rounded-t-lg">
-        <div class="flex items-center space-x-2">
-          <img
-            :src="selectedChat.shop?.avatar_url || 'https://via.placeholder.com/50'"
-            :alt="selectedChat.shop?.shop_name || 'Shop'"
-            class="w-8 h-8 rounded-full object-cover"
-          />
-          <span class="font-semibold truncate">{{ selectedChat.shop?.shop_name || 'Shop' }}</span>
-        </div>
-        <button @click="closeChatModal" class="text-white hover:text-gray-200">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <div class="flex-1 p-3 overflow-y-auto custom-scrollbar" ref="chatMessages">
-        <div v-for="message in selectedChat.messages" :key="message.created_at" class="mb-4">
-          <div
-            :class="{
-              'flex justify-end': message.sender_type === 'buyer',
-              'flex justify-start': message.sender_type === 'seller',
-            }"
-          >
-            <div class="message-bubble">
-              <p
-                :class="{
-                  'sent': message.sender_type === 'buyer',
-                  'received': message.sender_type === 'seller',
-                }"
-              >
-                {{ message.content }}
-              </p>
-              <span class="message-time">{{ formatDate(message.created_at) }}</span>
-            </div>
-          </div>
-        </div>
-        <div v-if="selectedChat.messages.length === 0" class="text-center text-gray-600 text-sm">
-          Chưa có tin nhắn
-        </div>
-      </div>
-      <div class="p-3 border-t">
-        <div class="flex items-center space-x-2">
-          <input
-            type="text"
-            v-model="newMessage"
-            placeholder="Nhập tin nhắn..."
-            class="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-            @keypress.enter="sendMessage"
-          />
-          <button
-            @click="sendMessage"
-            class="bg-orange-500 text-white p-2 rounded-lg hover:bg-orange-600"
-            :disabled="!newMessage.trim() || sending"
-          >
-            <span v-if="sending" class="spinner"></span>
-            Gửi
-          </button>
-        </div>
-      </div>
-    </div>
-  </header>
+    </header>
 </template>
 
 <script>
 import axios from 'axios';
+import { EventBus } from './ChatModal.vue';
 
 export default {
   props: {
@@ -345,11 +284,8 @@ export default {
       carts: [],
       chats: [],
       activeModal: null,
-      selectedChat: { seller: {}, shop: {}, messages: [] },
-      newMessage: '',
       closeTimeout: null,
-      sending: false,
-      pollingInterval: null,
+      role: localStorage.getItem('role') || null,
     };
   },
   computed: {
@@ -363,6 +299,9 @@ export default {
     },
     unreadChatsCount() {
       return this.chats.reduce((total, chat) => total + (chat.unread_count || 0), 0);
+    },
+    sellerLink() {
+      return this.role === 'seller' ? '/seller/dashboard' : '/seller/register';
     },
   },
   watch: {
@@ -378,7 +317,6 @@ export default {
         this.carts = [];
         this.chats = [];
         this.activeModal = null;
-        this.stopPolling();
       }
     },
     '$route.query.q': {
@@ -390,8 +328,9 @@ export default {
     '$route.path': {
       immediate: true,
       handler(newPath) {
-        if (newPath === '/buyer/messages' && this.activeModal === 'chat') {
-          this.closeChatModal();
+        if (newPath === '/buyer/messages') {
+          this.activeModal = null;
+          EventBus.emit('close-chat-modal');
         }
       },
     },
@@ -402,9 +341,12 @@ export default {
       this.fetchCart();
       this.fetchChats();
     }
+    EventBus.on('message-sent', this.handleMessageSent);
+    EventBus.on('update-chat-unread', this.handleUpdateChatUnread);
   },
   beforeDestroy() {
-    this.stopPolling();
+    EventBus.off('message-sent', this.handleMessageSent);
+    EventBus.off('update-chat-unread', this.handleUpdateChatUnread);
   },
   methods: {
     setActiveModal(modal) {
@@ -434,9 +376,6 @@ export default {
         this.activeModal = null;
         this.$router.push({ path: '/search', query: { q: this.searchQuery } });
       }
-    },
-    handleBlur() {
-      this.clearActiveModal();
     },
     async fetchSearchHistory() {
       if (!this.isLoggedInComputed) {
@@ -550,84 +489,39 @@ export default {
         this.$router.push('/buyer/messages');
         return;
       }
-      this.selectedChat = { ...chat, messages: [] };
-      this.setActiveModal('chat');
-      await this.fetchChatMessages(chat.seller.id);
-      this.startPolling();
+      this.$emit('open-chat-modal', { ...chat, messages: [] });
+      EventBus.emit('open-chat-modal', { ...chat, messages: [] });
     },
-    async fetchChatMessages(sellerId) {
-      try {
-        const response = await axios.get(`/buyer/chats/detail?seller_id=${sellerId}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        });
-        console.log('Chat messages response:', JSON.stringify(response.data, null, 2));
-        this.selectedChat.messages = response.data.data.messages || [];
-        if (this.$refs.chatMessages) {
-          this.$nextTick(() => {
-            this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight;
-          });
-        }
-        if (this.selectedChat.unread_count > 0) {
-          await axios.put(`/buyer/chats/${sellerId}/read`, {}, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          });
-          this.chats = this.chats.map(c =>
-            c.seller.id === sellerId ? { ...c, unread_count: 0 } : c
-          );
-        }
-      } catch (error) {
-        console.error('Error fetching chat messages:', error.response?.data || error.message);
-        if (error.response?.status === 404 && error.response?.data?.message === 'Cuộc trò chuyện chưa tồn tại. Gửi tin nhắn để bắt đầu!') {
-          this.selectedChat.messages = [];
-        } else if (error.response?.status === 401) {
-          this.logout();
-        }
+    handleUpdateChatUnread({ sellerId, unreadCount }) {
+      this.chats = this.chats.map(c =>
+        c.seller.id === sellerId ? { ...c, unread_count: unreadCount } : c
+      );
+    },
+    handleMessageSent(sellerId) {
+      this.fetchChats();
+    },
+    getImageUrl(imgUrl) {
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
       }
-    },
-    async sendMessage() {
-      if (!this.newMessage.trim() || this.sending) return;
-      this.sending = true;
-      try {
-        const response = await axios.post(
-          '/buyer/chats/send',
-          { receiver_id: this.selectedChat.seller.id, content: this.newMessage },
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-        );
-        console.log('Send message response:', JSON.stringify(response.data, null, 2));
-        this.selectedChat.messages.push(response.data.data);
-        this.newMessage = '';
-        this.$nextTick(() => {
-          this.$refs.chatMessages.scrollTop = this.$refs.chatMessages.scrollHeight;
-        });
-        await this.fetchChats();
-      } catch (error) {
-        console.error('Error sending message:', error.response?.data || error.message);
-        if (error.response?.status === 401) {
-          this.logout();
-        }
-      } finally {
-        this.sending = false;
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
       }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
     },
-    startPolling() {
-      if (this.pollingInterval) {
-        clearInterval(this.pollingInterval);
-      }
-      this.pollingInterval = setInterval(() => {
-        if (this.activeModal === 'chat' && this.selectedChat.seller.id) {
-          this.fetchChatMessages(this.selectedChat.seller.id);
-        }
-      }, 5000);
-    },
-    stopPolling() {
-      if (this.pollingInterval) {
-        clearInterval(this.pollingInterval);
-        this.pollingInterval = null;
-      }
-    },
-    closeChatModal() {
-      this.setActiveModal(null);
-      this.stopPolling();
+    handleImageError(event, imgUrl, type) {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        img_url: imgUrl,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
     },
     formatDate(date) {
       if (!date) return '';
@@ -643,7 +537,6 @@ export default {
       return Number(price).toLocaleString('vi-VN');
     },
     logout() {
-      this.stopPolling();
       localStorage.removeItem('token');
       localStorage.removeItem('role');
       localStorage.removeItem('loginType');
@@ -653,6 +546,9 @@ export default {
       this.$emit('update:isLoggedIn', false);
       this.$emit('update:user', { email: '', avatar_url: '', username: '' });
       this.$router.push('/buyer/login');
+    },
+    handleStorageChange() {
+      this.role = localStorage.getItem('role') || null;
     },
   },
 };
@@ -723,62 +619,16 @@ export default {
   scrollbar-color: #f97316 #f1f1f1;
 }
 
-.message-bubble {
-  max-width: 70%;
-  display: flex;
-  flex-direction: column;
+.chat-message-container {
+  max-width: 180px;
+  min-width: 0;
 }
 
-.message-bubble p {
-  display: inline-block;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 14px;
-  margin: 0;
-  line-height: 1.4;
-  max-width: 100%;
-  word-wrap: break-word;
-}
-
-.message-bubble p.sent {
-  background: #f97316;
-  color: #fff;
-  border-bottom-right-radius: 4px;
-}
-
-.message-bubble p.received {
-  background: #fed7aa;
-  color: #1f2937;
-  border-bottom-left-radius: 4px;
-}
-
-.message-time {
-  font-size: 11px;
-  color: #9ca3af;
-  margin-top: 6px;
-  text-align: inherit;
-}
-
-.flex.justify-end .message-bubble {
-  align-items: flex-end;
-}
-
-.flex.justify-start .message-bubble {
-  align-items: flex-start;
-}
-
-.spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid #fff;
-  border-top: 2px solid transparent;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 8px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.chat-message-container p.text-gray-600 {
+  overflow-wrap: break-word;
+  word-break: break-all;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 </style>

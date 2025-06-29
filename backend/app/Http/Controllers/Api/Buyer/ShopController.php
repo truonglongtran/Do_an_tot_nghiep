@@ -6,7 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\ShopFollower;
 use App\Models\Banner;
+use App\Models\Dispute;
+use App\Models\Order;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 class ShopController extends Controller
 {
@@ -15,7 +19,7 @@ class ShopController extends Controller
         try {
             $shop = Shop::where('id', $id)
                 ->where('status', 'active')
-                ->select('id', 'shop_name', 'avatar_url', 'cover_image_url', 'pickup_address')
+                ->select('id', 'shop_name', 'avatar_url', 'cover_image_url', 'pickup_address', 'owner_id')
                 ->with([
                     'products' => function ($q) {
                         $q->where('status', 'approved')
@@ -40,7 +44,6 @@ class ShopController extends Controller
                 ->whereNull('deleted_at')
                 ->exists() : false;
 
-            // Lấy banner cho shop
             $banners = Banner::where('start_date', '<=', now())
                 ->where('end_date', '>=', now())
                 ->whereHas('placements', function ($query) use ($id) {
@@ -63,10 +66,11 @@ class ShopController extends Controller
                 'shop' => [
                     'id' => $shop->id,
                     'shop_name' => $shop->shop_name,
-                    'avatar_url' => $shop->avatar_url,
-                    'cover_image_url' => $shop->cover_image_url,
+                    'avatar_url' => $shop->avatar_url ? Storage::url($shop->avatar_url) : null,
+                    'cover_image_url' => $shop->cover_image_url ? Storage::url($shop->cover_image_url) : null,
                     'pickup_address' => $shop->pickup_address,
                     'is_following' => $isFollowing,
+                    'seller_id' => $shop->owner_id, // Map owner_id to seller_id
                     'products' => $shop->products->map(fn($p) => [
                         'id' => $p->id,
                         'name' => $p->name,
@@ -79,14 +83,14 @@ class ShopController extends Controller
                         'variants' => $p->variants->map(fn($v) => [
                             'id' => $v->id,
                             'price' => $v->price,
-                            'image_url' => $v->image_url,
+                            'image_url' => $v->image_url ? Storage::url($v->image_url) : null,
                             'stock' => $v->stock,
                         ]),
                         'lowest_price' => $p->variants->count() > 0 ? $p->variants->min('price') : $p->price,
                         'product_variant' => $p->variants->sortBy('price')->first() ? [
                             'id' => $p->variants->sortBy('price')->first()->id,
                             'price' => $p->variants->sortBy('price')->first()->price,
-                            'image_url' => $p->variants->sortBy('price')->first()->image_url,
+                            'image_url' => $p->variants->sortBy('price')->first()->image_url ? Storage::url($p->variants->sortBy('price')->first()->image_url) : null,
                             'stock' => $p->variants->sortBy('price')->first()->stock,
                         ] : null,
                     ]),
@@ -94,7 +98,7 @@ class ShopController extends Controller
                 'banners' => $banners->map(fn($b) => [
                     'id' => $b->id,
                     'title' => $b->title ?? '',
-                    'img_url' => $b->img_url ?? 'https://via.placeholder.com/1200x400?text=Banner',
+                    'img_url' => $b->img_url ? Storage::url($b->img_url) : 'https://via.placeholder.com/1200x400?text=Banner',
                     'link_url' => $b->link_url ?? '#',
                     'location_code' => $b->placements->first()->location->code ?? '',
                 ]),
@@ -158,6 +162,64 @@ class ShopController extends Controller
         } catch (\Exception $e) {
             \Log::error('Lỗi ShopController@unfollow: ' . $e->getMessage() . ' | Shop ID: ' . $id);
             return response()->json(['error' => 'Lỗi khi bỏ theo dõi cửa hàng'], 500);
+        }
+    }
+
+     public function createDispute(Request $request, $id)
+    {
+        try {
+            $user = $request->user();
+            $shop = Shop::where('id', $id)
+                ->where('status', 'active')
+                ->select('id', 'owner_id')
+                ->firstOrFail();
+
+            $validator = Validator::make($request->all(), [
+                'order_id' => 'required|integer|exists:orders,id',
+                'reason' => 'required|string|min:10|max:1000',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['error' => $validator->errors()->first()], 422);
+            }
+
+            $order = Order::where('id', $request->order_id)
+                ->where('buyer_id', $user->id)
+                ->where('seller_id', $shop->owner_id)
+                ->firstOrFail();
+
+            $existingDispute = Dispute::where('order_id', $request->order_id)
+                ->where('status', '!=', 'resolved')
+                ->first();
+
+            if ($existingDispute) {
+                return response()->json(['error' => 'Đơn hàng này đã có khiếu nại đang chờ xử lý'], 409);
+            }
+
+            $dispute = Dispute::create([
+                'order_id' => $request->order_id,
+                'buyer_id' => $user->id,
+                'seller_id' => $shop->owner_id,
+                'reason' => $request->reason,
+                'status' => 'open', // Sửa từ 'pending' thành 'open'
+            ]);
+
+            return response()->json([
+                'message' => 'Khiếu nại đã được gửi thành công',
+                'dispute' => [
+                    'id' => $dispute->id,
+                    'order_id' => $dispute->order_id,
+                    'reason' => $dispute->reason,
+                    'status' => $dispute->status,
+                    'created_at' => $dispute->created_at->toDateTimeString(),
+                ],
+            ], 201);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            \Log::error('Shop or Order not found for dispute: Shop ID=' . $id . ', Order ID=' . $request->order_id);
+            return response()->json(['error' => 'Cửa hàng hoặc đơn hàng không tồn tại'], 404);
+        } catch (\Exception $e) {
+            \Log::error('Lỗi ShopController@createDispute: ' . $e->getMessage() . ' | Shop ID: ' . $id);
+            return response()->json(['error' => 'Lỗi khi gửi khiếu nại: ' . $e->getMessage()], 500);
         }
     }
 }

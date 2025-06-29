@@ -142,6 +142,7 @@ Route::prefix('admin')->group(function () {
 
 Route::prefix('seller')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/register', [AuthController::class, 'registerSeller']);
 
     Route::middleware(['auth:sanctum', 'role:seller'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
@@ -181,7 +182,7 @@ Route::prefix('seller')->group(function () {
 
 Route::prefix('buyer')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
-    // Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/register', [AuthController::class, 'registerBuyer']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
     // Public routes
@@ -192,9 +193,9 @@ Route::prefix('buyer')->group(function () {
     Route::get('/products/{id}', [ProductController::class, 'show']);
     Route::get('/shops/{id}', [ShopController::class, 'show']);
 
-    Route::middleware(['auth:sanctum', 'role:buyer'])->group(function () {
+    Route::middleware(['auth:sanctum', 'role:buyer,seller'])->group(function () {
         Route::get('/user', [UserController::class, 'getUser']);
-        Route::post('/user/update', [UserController::class, 'updateUser']);
+        Route::post('/user', [UserController::class, 'updateUser']);
         
         Route::get('/search-history', [SearchController::class, 'history']);
         Route::delete('/search-history/{id}', [SearchController::class, 'deleteSearchHistory']);
@@ -227,6 +228,7 @@ Route::prefix('buyer')->group(function () {
 
         Route::post('/shops/{id}/follow', [ShopController::class, 'follow']);
         Route::delete('/shops/{id}/unfollow', [ShopController::class, 'unfollow']);
+        Route::post('/shops/{id}/dispute', [ShopController::class, 'createDispute'])->name('shops.dispute');
 
         Route::get('/messages', [MessageController::class, 'index']);
         Route::post('/messages/send', [MessageController::class, 'send']);

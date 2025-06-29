@@ -17,7 +17,7 @@ class MessageController extends Controller
         Log::info('Fetching conversations for seller', ['seller_id' => $seller->id]);
 
         $messages = Message::where('seller_id', $seller->id)
-            ->with('buyer:id,username')
+            ->with('buyer:id,username,avatar_url') // Include avatar_url in the buyer relationship
             ->orderBy('last_message_at', 'desc')
             ->get()
             ->map(function ($message) {
@@ -29,6 +29,7 @@ class MessageController extends Controller
                     'buyer' => [
                         'id' => $message->buyer->id,
                         'username' => $message->buyer->username,
+                        'avatar_url' => $message->buyer->avatar_url ?? 'https://via.placeholder.com/50', // Fallback if null
                     ],
                     'last_message' => $lastMessage ? [
                         'content' => $lastMessage['content'],
@@ -196,7 +197,7 @@ class MessageController extends Controller
 
     public function getBuyers(Request $request)
     {
-        $buyers = User::where('role', 'buyer')->select('id', 'username')->get();
+        $buyers = User::where('role', 'buyer')->select('id', 'username', 'avatar_url')->get();
         Log::info('Fetching buyers', ['buyer_count' => $buyers->count()]);
         return response()->json([
             'success' => true,

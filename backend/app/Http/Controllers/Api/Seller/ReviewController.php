@@ -33,7 +33,7 @@ class ReviewController extends Controller
                 $query->where('shop_id', $shop->id);
             })
                 ->with([
-                    'buyer:id,email',
+                    'user:id,email',
                     'product:id,name,shop_id',
                     'product.shop:id,shop_name'
                 ])

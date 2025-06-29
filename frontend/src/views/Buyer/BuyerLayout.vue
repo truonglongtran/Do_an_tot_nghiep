@@ -1,12 +1,12 @@
 <template>
   <div class="min-h-screen flex flex-col">
-    <Header :is-logged-in="isLoggedIn" :user="user" />
-    <main class="flex-1 pt-16"> <!-- Thêm pt-16 (~64px) để tránh header che -->
-      <router-view />
+    <Header :is-logged-in="isLoggedIn" :user="user" @open-chat-modal="handleOpenChatModal" />
+    <main class="flex-1 pt-16">
+      <router-view @open-chat-modal="handleOpenChatModal" />
     </main>
     <Footer />
     <!-- Bottom Navigation Bar (Mobile) -->
-    <nav class="md:hidden fixed bottom-0 w-full bg-white shadow-lg flex justify-around py-2">
+    <nav class="md:hidden fixed bottom-0 w-full bg-white shadow-lg flex justify-around py-2 z-50">
       <router-link to="/" class="flex flex-col items-center text-gray-600 hover:text-orange-500">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7m-9 5v6h4v-6m-6 0h6" />
@@ -38,15 +38,31 @@
         <span class="text-xs">Tài khoản</span>
       </router-link>
     </nav>
+    <!-- Chat Modal -->
+    <ChatModal
+      :is-open="activeModal === 'chat'"
+      :selected-chat="selectedChat"
+      @update:selected-chat="updateSelectedChat"
+      @update-chat-unread="updateChatUnread"
+      @close="closeChatModal"
+    />
   </div>
 </template>
 
 <script>
 import Header from './component/Header.vue';
 import Footer from './component/Footer.vue';
+import ChatModal from './component/ChatModal.vue';
+import { EventBus } from './component/ChatModal.vue';
 
 export default {
-  components: { Header, Footer },
+  components: { Header, Footer, ChatModal },
+  data() {
+    return {
+      activeModal: null,
+      selectedChat: { seller: {}, shop: {}, messages: [], unread_count: 0 },
+    };
+  },
   computed: {
     isLoggedIn() {
       return !!localStorage.getItem('token');
@@ -59,9 +75,43 @@ export default {
       };
     },
   },
+  created() {
+    EventBus.on('open-chat-modal', this.handleOpenChatModal);
+    EventBus.on('update-chat', this.handleUpdateChat);
+    EventBus.on('close-chat-modal', this.closeChatModal);
+  },
+  beforeDestroy() {
+    EventBus.off('open-chat-modal', this.handleOpenChatModal);
+    EventBus.off('update-chat', this.handleUpdateChat);
+    EventBus.off('close-chat-modal', this.closeChatModal);
+  },
+  methods: {
+    handleOpenChatModal(chat) {
+      if (this.$route.path === '/buyer/messages') {
+        return;
+      }
+      this.selectedChat = { ...chat, messages: [] };
+      this.activeModal = 'chat';
+    },
+    updateSelectedChat(updatedChat) {
+      this.selectedChat = updatedChat;
+    },
+    updateChatUnread(sellerId, unreadCount) {
+      // Không cần cập nhật danh sách chats ở đây, để Header.vue xử lý
+      EventBus.emit('update-chat-unread', { sellerId, unreadCount });
+    },
+    handleUpdateChat(updatedChat) {
+      if (this.activeModal === 'chat' && this.selectedChat.seller.id === updatedChat.seller.id) {
+        this.selectedChat = updatedChat;
+      }
+    },
+    closeChatModal() {
+      this.activeModal = null;
+    },
+  },
 };
 </script>
 
 <style scoped>
-/* Không cần style vì Tailwind CSS đã xử lý */
+/* Đảm bảo z-index của modal cao hơn nav */
 </style>

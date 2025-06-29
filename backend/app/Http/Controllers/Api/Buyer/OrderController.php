@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\Api\Buyer;
 
 use App\Http\Controllers\Controller;
@@ -13,6 +12,7 @@ use App\Models\Voucher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class OrderController extends Controller
 {
@@ -30,15 +30,16 @@ class OrderController extends Controller
                         'total' => $order->total,
                         'created_at' => $order->created_at,
                         'reviews' => $order->reviews->map(function ($review) {
+                            $images = is_array($review->images) ? $review->images : (json_decode($review->images, true) ?? []);
                             return [
                                 'id' => $review->id,
                                 'product_id' => $review->product_id,
                                 'rating' => $review->rating,
                                 'comment' => $review->comment,
-                                'images' => $review->images ? json_decode($review->images, true) : [],
+                                'images' => array_map(fn($path) => $path ? Storage::url($path) : null, $images),
                                 'created_at' => $review->created_at->toDateTimeString(),
                             ];
-                        }),
+                        })->filter(fn($review) => !empty($review['images'])),
                         'items' => $order->items->map(function ($item) {
                             return [
                                 'id' => $item->id,
@@ -48,12 +49,12 @@ class OrderController extends Controller
                                 'is_reviewed' => $item->is_reviewed,
                                 'product' => $item->product ? [
                                     'name' => $item->product->name,
-                                    'image_url' => $item->product->image_url,
+                                    'image_url' => $item->product->image_url ? Storage::url($item->product->image_url) : 'https://via.placeholder.com/50',
                                 ] : null,
                                 'product_variant' => $item->productVariant ? [
                                     'name' => $item->productVariant->name,
                                     'price' => $item->productVariant->price,
-                                    'image_url' => $item->productVariant->image_url,
+                                    'image_url' => $item->productVariant->image_url ? Storage::url($item->productVariant->image_url) : 'https://via.placeholder.com/50',
                                 ] : null,
                             ];
                         }),
@@ -88,15 +89,16 @@ class OrderController extends Controller
                     'total' => $order->total,
                     'created_at' => $order->created_at,
                     'reviews' => $order->reviews->map(function ($review) {
+                        $images = is_array($review->images) ? $review->images : (json_decode($review->images, true) ?? []);
                         return [
                             'id' => $review->id,
                             'product_id' => $review->product_id,
                             'rating' => $review->rating,
                             'comment' => $review->comment,
-                            'images' => $review->images ? json_decode($review->images, true) : [],
+                            'images' => array_map(fn($path) => $path ? Storage::url($path) : null, $images),
                             'created_at' => $review->created_at->toDateTimeString(),
                         ];
-                    }),
+                    })->filter(fn($review) => !empty($review['images'])),
                     'items' => $order->items->map(function ($item) {
                         return [
                             'id' => $item->id,
@@ -106,12 +108,12 @@ class OrderController extends Controller
                             'is_reviewed' => $item->is_reviewed,
                             'product' => $item->product ? [
                                 'name' => $item->product->name,
-                                'image_url' => $item->product->image_url,
+                                'image_url' => $item->product->image_url ? Storage::url($item->product->image_url) : 'https://via.placeholder.com/50',
                             ] : null,
                             'product_variant' => $item->productVariant ? [
                                 'name' => $item->productVariant->name,
                                 'price' => $item->productVariant->price,
-                                'image_url' => $item->productVariant->image_url,
+                                'image_url' => $item->productVariant->image_url ? Storage::url($item->productVariant->image_url) : 'https://via.placeholder.com/50',
                             ] : null,
                         ];
                     }),

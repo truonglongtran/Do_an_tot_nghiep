@@ -33,6 +33,12 @@
           {{ isLoading ? 'Đang đăng nhập...' : 'Đăng nhập' }}
         </button>
       </form>
+      <p v-if="showRegisterLink" class="mt-4 text-center">
+        Chưa có tài khoản? 
+        <router-link :to="registerPath" class="text-blue-500 hover:underline">
+          Đăng ký {{ roleLabel }}
+        </router-link>
+      </p>
     </div>
   </div>
 </template>
@@ -50,12 +56,20 @@ export default {
   },
   computed: {
     roleLabel() {
-      const type = this.route.path.split('/')[1]; // 'admin', 'seller', hoặc 'buyer'
+      const type = this.route.path.split('/')[1]; // 'admin', 'seller', or 'buyer'
       return type === 'admin' ? 'Admin' : type === 'seller' ? 'Người bán' : 'Người mua';
     },
     loginEndpoint() {
-      const type = this.route.path.split('/')[1]; // Lấy 'admin', 'seller', hoặc 'buyer'
-      return `http://localhost:8000/api/${type}/login`; // Tạo URL đúng
+      const type = this.route.path.split('/')[1]; // 'admin', 'seller', or 'buyer'
+      return `http://localhost:8000/api/${type}/login`;
+    },
+    showRegisterLink() {
+      const type = this.route.path.split('/')[1];
+      return type === 'buyer' || type === 'seller'; // Only show register link for buyer and seller
+    },
+    registerPath() {
+      const type = this.route.path.split('/')[1];
+      return type === 'buyer' ? '/buyer/register' : '/seller/register';
     },
   },
   data() {
@@ -93,16 +107,15 @@ export default {
           localStorage.setItem('avatar_url', response.data.user.avatar_url || 'https://via.placeholder.com/50');
           localStorage.setItem('role', response.data.role);
           localStorage.setItem('loginType', this.route.path.split('/')[1]);
-          console.log('localStorage username:', localStorage.getItem('username')); // Debug
-          // Trigger storage event
+          console.log('localStorage username:', localStorage.getItem('username'));
           window.dispatchEvent(new Event('storage'));
           const loginType = this.route.path.split('/')[1];
           if (loginType === 'admin') {
             this.router.push('/admin/dashboard');
           } else if (loginType === 'seller') {
             this.router.push('/seller/dashboard');
-          } else if (loginType === 'buyer') {
-            this.router.push('/buyer/dashboard');
+          } else {
+            this.router.push('/');
           }
         } else {
           console.log('Lỗi: Phản hồi không hợp lệ, status:', response.status, 'data:', response.data);

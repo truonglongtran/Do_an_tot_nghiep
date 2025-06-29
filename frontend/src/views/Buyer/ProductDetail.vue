@@ -15,9 +15,10 @@
         <div class="relative">
           <div class="relative w-full h-96 transition-opacity duration-300">
             <img
-              :src="selectedImage"
+              :src="getImageUrl(selectedImage)"
               :alt="product.name"
               class="w-full h-full object-cover rounded-lg"
+              @error="handleImageError($event, selectedImage, 'main')"
             />
             <!-- Image Counter -->
             <div
@@ -57,11 +58,12 @@
             <img
               v-for="(variant, index) in activeVariants"
               :key="variant.id"
-              :src="variant.image_url || `https://via.placeholder.com/150?text=Variant-${index + 1}`"
+              :src="getImageUrl(variant.image_url || `https://via.placeholder.com/150?text=Variant-${index + 1}`)"
               :alt="variant.sku || 'Biến thể'"
               class="w-16 h-16 object-cover rounded cursor-pointer flex-shrink-0"
               :class="{ 'border-2 border-orange-500': index === variantImageIndex, 'opacity-50': variant.stock === 0 }"
               @click="selectVariant(index)"
+              @error="handleImageError($event, variant.image_url, 'variant')"
             />
           </div>
         </div>
@@ -71,7 +73,7 @@
           <h1 class="text-2xl font-bold text-orange-500 mb-2">{{ product.name }}</h1>
           <div class="flex items-center mb-4">
             <span class="text-orange-500 font-bold text-xl">
-              {{ hasVariants ? (selectedVariant?.price ? selectedVariant.price + 'đ' : 'Chưa có giá') : (product.price ? product.price + 'đ' : 'Chưa có giá') }}
+              {{ hasVariants ? (selectedVariant?.price ? formatPrice(selectedVariant.price) + 'đ' : 'Chưa có giá') : (product.price ? formatPrice(product.price) + 'đ' : 'Chưa có giá') }}
             </span>
             <span class="ml-2 text-gray-500 text-sm">Đã bán {{ product.sold_count || 0 }}</span>
           </div>
@@ -149,7 +151,14 @@
             <p class="text-gray-600">{{ review.comment || 'Không có bình luận' }}</p>
             <p class="text-yellow-500">Đánh giá: {{ review.rating }}/5</p>
             <div v-if="parsedReviewImages(review.images)?.length" class="flex overflow-x-auto space-x-2 pb-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
-              <img v-for="img in parsedReviewImages(review.images).slice(0, 5)" :key="img" :src="img" class="w-16 h-16 object-cover rounded flex-shrink-0" />
+              <img
+                v-for="(img, index) in parsedReviewImages(review.images).slice(0, 5)"
+                :key="img"
+                :src="getImageUrl(img)"
+                :alt="'Review image ' + index"
+                class="w-16 h-16 object-cover rounded flex-shrink-0"
+                @error="handleImageError($event, img, 'review_image_' + index)"
+              />
             </div>
             <p class="text-gray-500 text-sm">{{ formatDate(review.created_at) }}</p>
           </div>
@@ -203,6 +212,30 @@ export default {
     await this.fetchProduct();
   },
   methods: {
+    getImageUrl(imgUrl) {
+      console.log('Đường dẫn ảnh đầu vào:', imgUrl);
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
+    handleImageError(event, imgUrl, type) {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        img_url: imgUrl,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+    },
     async fetchProduct() {
       this.loading = true;
       this.error = null;
@@ -277,6 +310,9 @@ export default {
         minute: '2-digit',
         hour12: false,
       }).format(new Date(date));
+    },
+    formatPrice(price) {
+      return Number(price).toLocaleString('vi-VN');
     },
     parseImages(images) {
       if (!images) return [];

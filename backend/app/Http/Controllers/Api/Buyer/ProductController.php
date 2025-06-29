@@ -1,10 +1,10 @@
 <?php
-
 namespace App\Http\Controllers\Api\Buyer;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
@@ -32,7 +32,9 @@ class ProductController extends Controller
                 throw new \Exception('Cửa hàng không hợp lệ');
             }
 
+            // Chuyển đổi images thành URL công khai
             $images = is_array($product->images) ? $product->images : (json_decode($product->images, true) ?? []);
+            $images = array_map(fn($path) => $path ? Storage::url($path) : null, $images);
 
             return response()->json([
                 'product' => [
@@ -40,15 +42,15 @@ class ProductController extends Controller
                     'name' => $product->name ?? '',
                     'description' => $product->description ?? '',
                     'sold_count' => $product->sold_count ?? 0,
-                    'price' => $product->price, // Giá từ products
+                    'price' => $product->price,
                     'lowest_price' => $product->variants->count() > 0 ? $product->variants->min('price') : $product->price,
-                    'images' => $images,
+                    'images' => array_filter($images, fn($url) => !is_null($url)),
                     'product_variants' => $product->variants->map(fn($v) => [
                         'id' => $v->id,
                         'sku' => $v->sku ?? '',
                         'price' => $v->price ?? 0,
                         'stock' => $v->stock ?? 0,
-                        'image_url' => $v->image_url ?? 'https://via.placeholder.com/150?text=Variant',
+                        'image_url' => $v->image_url ? Storage::url($v->image_url) : 'https://via.placeholder.com/150?text=Variant',
                         'status' => $v->status ?? null,
                     ]),
                     'shop' => [
@@ -59,7 +61,10 @@ class ProductController extends Controller
                         'id' => $r->id,
                         'comment' => $r->comment ?? '',
                         'rating' => $r->rating ?? 0,
-                        'images' => is_array($r->images) ? $r->images : (json_decode($r->images, true) ?? []),
+                        'images' => array_map(
+                            fn($path) => $path ? Storage::url($path) : null,
+                            is_array($r->images) ? $r->images : (json_decode($r->images, true) ?? [])
+                        ),
                         'created_at' => $r->created_at,
                         'username' => $r->user->username ?? 'Ẩn danh',
                     ]),

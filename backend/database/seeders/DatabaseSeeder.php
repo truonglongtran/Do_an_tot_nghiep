@@ -58,7 +58,7 @@ class DatabaseSeeder extends Seeder
             SearchHistorySeeder::class, // Depends on Users, Products
             NotificationSeeder::class, // Can depend on Users
             MessageSeeder::class, // Depends on Users
-            ReportSeeder::class, // Can depend on various entities
+            // ReportSeeder::class, // Can depend on various entities
             BannerSeeder::class, // General content
             // PaymentSeeder::class, // Uncomment if ready and dependencies met
             // AdminLogSeeder::class, // Uncomment if ready and dependencies met

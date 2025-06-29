@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class MessageController extends Controller
 {
@@ -24,15 +25,19 @@ class MessageController extends Controller
                 ->map(function ($message) {
                     $messagesArray = $message->messages ?? [];
                     $lastMessage = !empty($messagesArray) ? end($messagesArray) : null;
+                    $sellerAvatarUrl = $message->seller->avatar_url ? Storage::url($message->seller->avatar_url) : 'https://via.placeholder.com/50';
+                    $shopAvatarUrl = $message->seller->shop && $message->seller->shop->avatar_url 
+                        ? Storage::url($message->seller->shop->avatar_url) 
+                        : $sellerAvatarUrl;
                     return [
                         'seller' => [
                             'id' => $message->seller->id,
-                            'username' => $message->seller->username ?? 'Shop', // Keep for compatibility
-                            'avatar_url' => $message->seller->avatar_url ?? 'https://via.placeholder.com/50',
+                            'username' => $message->seller->username ?? 'Shop',
+                            'avatar_url' => $sellerAvatarUrl,
                         ],
-                        'shop' => $message->seller->shop ? [ // Add shop data
+                        'shop' => $message->seller->shop ? [
                             'shop_name' => $message->seller->shop->shop_name,
-                            'avatar_url' => $message->seller->shop->avatar_url ?? $message->seller->avatar_url,
+                            'avatar_url' => $shopAvatarUrl,
                         ] : null,
                         'last_message' => $lastMessage ? [
                             'content' => $lastMessage['content'],
@@ -125,6 +130,11 @@ class MessageController extends Controller
                 $message = $messagesQuery->first();
             }
 
+            $sellerAvatarUrl = $seller->avatar_url ? Storage::url($seller->avatar_url) : 'https://via.placeholder.com/50';
+            $shopAvatarUrl = $seller->shop && $seller->shop->avatar_url 
+                ? Storage::url($seller->shop->avatar_url) 
+                : $sellerAvatarUrl;
+
             if (!$message) {
                 Log::info('No conversation found', [
                     'buyer_id' => $buyer->id,
@@ -137,11 +147,11 @@ class MessageController extends Controller
                         'seller' => [
                             'id' => $seller->id,
                             'username' => $seller->username ?? 'Shop',
-                            'avatar_url' => $seller->avatar_url ?? 'https://via.placeholder.com/50',
+                            'avatar_url' => $sellerAvatarUrl,
                         ],
                         'shop' => $seller->shop ? [
                             'shop_name' => $seller->shop->shop_name,
-                            'avatar_url' => $seller->shop->avatar_url ?? $seller->avatar_url,
+                            'avatar_url' => $shopAvatarUrl,
                         ] : null,
                         'messages' => [],
                     ],
@@ -161,11 +171,11 @@ class MessageController extends Controller
                     'seller' => [
                         'id' => $seller->id,
                         'username' => $seller->username ?? 'Shop',
-                        'avatar_url' => $seller->avatar_url ?? 'https://via.placeholder.com/50',
+                        'avatar_url' => $sellerAvatarUrl,
                     ],
                     'shop' => $seller->shop ? [
                         'shop_name' => $seller->shop->shop_name,
-                        'avatar_url' => $seller->shop->avatar_url ?? $seller->avatar_url,
+                        'avatar_url' => $shopAvatarUrl,
                     ] : null,
                     'messages' => $message->messages ?? [],
                 ],
@@ -361,13 +371,14 @@ class MessageController extends Controller
                 ->select('id', 'username', 'avatar_url')
                 ->get()
                 ->map(function ($seller) {
+                    $sellerAvatarUrl = $seller->avatar_url ? Storage::url($seller->avatar_url) : 'https://via.placeholder.com/50';
                     return [
                         'id' => $seller->id,
                         'username' => $seller->username,
-                        'avatar_url' => $seller->avatar_url,
+                        'avatar_url' => $sellerAvatarUrl,
                         'shop' => $seller->shop ? [
                             'shop_name' => $seller->shop->shop_name,
-                            'avatar_url' => $seller->shop->avatar_url ?? $seller->avatar_url,
+                            'avatar_url' => $seller->shop->avatar_url ? Storage::url($seller->shop->avatar_url) : $sellerAvatarUrl,
                         ] : null,
                     ];
                 });

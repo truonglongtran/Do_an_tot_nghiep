@@ -7,6 +7,7 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
@@ -25,7 +26,7 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         try {
-            Log::info('Fetching products with params:', $request->all()); // Debug request params
+            Log::info('Fetching products with params:', $request->all());
             $query = Product::with([
                 'category' => fn($q) => $q->select('id', 'name'),
                 'variants' => fn($q) => $q->select('id', 'product_id', 'sku', 'price', 'stock', 'image_url', 'status'),
@@ -62,12 +63,16 @@ class ProductController extends Controller
                     ->where('orders.order_status', 'paid')
                     ->sum('order_items.quantity');
 
+                // Chuyển đổi images thành URL công khai
+                $images = $product->images ? json_decode($product->images, true) : [];
+                $images = array_map(fn($path) => $path ? Storage::url($path) : null, $images);
+
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
                     'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
-                    'images' => $product->images ? json_decode($product->images, true) : [],
-                    'thumbnail' => $product->images ? (json_decode($product->images, true)[0] ?? null) : ($product->variants->first()->image_url ?? null),
+                    'images' => $images,
+                    'thumbnail' => !empty($images) ? $images[0] : ($product->variants->first()->image_url ? Storage::url($product->variants->first()->image_url) : null),
                     'price_min' => $product->variants->count() ? $product->variants->min('price') : $product->price,
                     'price_max' => $product->variants->count() ? $product->variants->max('price') : $product->price,
                     'total_stock' => $product->variants->count() ? $product->variants->sum('stock') : $product->stock,
@@ -85,7 +90,7 @@ class ProductController extends Controller
                             'sku' => $variant->sku,
                             'price' => $variant->price,
                             'stock' => $variant->stock,
-                            'image_url' => $variant->image_url,
+                            'image_url' => $variant->image_url ? Storage::url($variant->image_url) : null,
                             'status' => $variant->status,
                             'sales' => (int) $variantSales,
                             'attributes' => $variant->variantAttributes->map(function ($attr) {
@@ -131,12 +136,16 @@ class ProductController extends Controller
                 ->where('orders.order_status', 'paid')
                 ->sum('order_items.quantity');
 
+            // Chuyển đổi images thành URL công khai
+            $images = $product->images ? json_decode($product->images, true) : [];
+            $images = array_map(fn($path) => $path ? Storage::url($path) : null, $images);
+
             $formattedProduct = [
                 'id' => $product->id,
                 'name' => $product->name,
                 'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
-                'images' => $product->images ? json_decode($product->images, true) : [],
-                'thumbnail' => $product->images ? (json_decode($product->images, true)[0] ?? null) : ($product->variants->first()->image_url ?? null),
+                'images' => $images,
+                'thumbnail' => !empty($images) ? $images[0] : ($product->variants->first()->image_url ? Storage::url($product->variants->first()->image_url) : null),
                 'price_min' => $product->variants->count() ? $product->variants->min('price') : $product->price,
                 'price_max' => $product->variants->count() ? $product->variants->max('price') : $product->price,
                 'total_stock' => $product->variants->count() ? $product->variants->sum('stock') : $product->stock,
@@ -154,7 +163,7 @@ class ProductController extends Controller
                         'sku' => $variant->sku,
                         'price' => $variant->price,
                         'stock' => $variant->stock,
-                        'image_url' => $variant->image_url,
+                        'image_url' => $variant->image_url ? Storage::url($variant->image_url) : null,
                         'status' => $variant->status,
                         'sales' => (int) $variantSales,
                         'attributes' => $variant->variantAttributes->map(function ($attr) {

@@ -11,13 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Drop the existing reports table if it exists
+        Schema::dropIfExists('reports');
+
+        // Create the reports table
         Schema::create('reports', function (Blueprint $table) {
             $table->id();
-            $table->enum('report_type', ['daily', 'week', 'month']);
-            $table->string('file_url');
+            $table->enum('report_type', ['daily', 'monthly', 'yearly']);
+            $table->string('file_url')->nullable();
+            $table->string('shop_name');
             $table->timestamps();
         });
-        
     }
 
     /**
@@ -28,3 +32,4 @@ return new class extends Migration
         Schema::dropIfExists('reports');
     }
 };
+

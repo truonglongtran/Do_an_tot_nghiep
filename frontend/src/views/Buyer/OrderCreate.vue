@@ -45,9 +45,10 @@
         <div class="space-y-4">
           <div v-for="cart in shopData.carts" :key="cart.id" class="flex items-center space-x-4">
             <img
-              :src="cart.product_variant?.image_url || 'https://via.placeholder.com/100'"
+              :src="getImageUrl(cart.product_variant?.image_url)"
               :alt="cart.product_variant?.product?.name || 'Sản phẩm không xác định'"
               class="w-16 h-16 object-cover rounded"
+              @error="handleImageError($event, cart.product_variant?.image_url, 'order_create_' + cart.id)"
             />
             <div class="flex-1">
               <p class="font-semibold">{{ cart.product_variant?.product?.name || 'Sản phẩm không xác định' }}</p>
@@ -185,6 +186,29 @@ export default {
     }
   },
   methods: {
+    getImageUrl(imgUrl) {
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/100?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
+    handleImageError(event, imgUrl, type) {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        img_url: imgUrl,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/100?text=Ảnh+Không+Tìm+Thấy';
+    },
     async fetchData() {
       this.loading = true;
       this.error = null;

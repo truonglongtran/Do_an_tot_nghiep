@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class CartController extends Controller
 {
@@ -53,7 +54,7 @@ class CartController extends Controller
                         'sku' => $cart->productVariant->sku,
                         'price' => $cart->productVariant->price,
                         'stock' => $cart->productVariant->stock,
-                        'image_url' => $cart->productVariant->image_url ?? 'https://via.placeholder.com/100',
+                        'image_url' => $cart->productVariant->image_url ? Storage::url($cart->productVariant->image_url) : 'https://via.placeholder.com/100',
                         'status' => $cart->productVariant->status,
                         'product' => $cart->productVariant->product ? [
                             'id' => $cart->productVariant->product->id,
@@ -83,7 +84,6 @@ class CartController extends Controller
         }
     }
 
-    // Rest of the CartController (add, update, destroy, count) remains unchanged
     public function add(Request $request)
     {
         try {
@@ -197,7 +197,7 @@ class CartController extends Controller
                         'sku' => $updatedCart->productVariant->sku,
                         'price' => $updatedCart->productVariant->price,
                         'stock' => $updatedCart->productVariant->stock,
-                        'image_url' => $updatedCart->productVariant->image_url ?? 'https://via.placeholder.com/100',
+                        'image_url' => $updatedCart->productVariant->image_url ? Storage::url($updatedCart->productVariant->image_url) : 'https://via.placeholder.com/100',
                         'status' => $updatedCart->productVariant->status,
                         'product' => $updatedCart->productVariant->product ? [
                             'id' => $updatedCart->productVariant->product->id,
@@ -317,7 +317,7 @@ class CartController extends Controller
                         'sku' => $updatedCart->productVariant->sku,
                         'price' => $updatedCart->productVariant->price,
                         'stock' => $updatedCart->productVariant->stock,
-                        'image_url' => $updatedCart->productVariant->image_url ?? 'https://via.placeholder.com/100',
+                        'image_url' => $updatedCart->productVariant->image_url ? Storage::url($updatedCart->productVariant->image_url) : 'https://via.placeholder.com/100',
                         'status' => $updatedCart->productVariant->status,
                         'product' => $updatedCart->productVariant->product ? [
                             'id' => $updatedCart->productVariant->product->id,

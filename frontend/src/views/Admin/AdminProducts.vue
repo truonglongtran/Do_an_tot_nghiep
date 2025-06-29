@@ -61,7 +61,12 @@
                 <tr class="product-header">
                   <td style="width: 350px; padding: 0.5rem;">
                     <div class="flex items-center">
-                      <img :src="product.thumbnail || 'https://placehold.co/50x50'" :alt="product.name || 'Product'" class="w-16 h-16 mr-4 object-cover">
+                      <img 
+                        :src="getImageUrl(product.thumbnail)" 
+                        :alt="product.name || 'Product'" 
+                        class="w-16 h-16 mr-4 object-cover"
+                        @error="handleImageError($event, product, 'thumbnail')"
+                      >
                       <div>
                         <a :href="'/portal/product/' + product.id" class="text-blue-600 hover:underline product-name-wrap" target="_blank">
                           {{ product.name || 'N/A' }}
@@ -102,7 +107,12 @@
                 <tr v-for="variant in product.variants" :key="variant.id" class="variant-row">
                   <td style="width: 350px; padding: 0.5rem 0.5rem 0.5rem 2rem;">
                     <div class="flex items-center variant-content">
-                      <img :src="variant.image_url || 'https://placehold.co/50x50'" :alt="variant.sku || 'Variant'" class="w-12 h-12 mr-2 object-cover">
+                      <img 
+                        :src="getImageUrl(variant.image_url)" 
+                        :alt="variant.sku || 'Variant'" 
+                        class="w-12 h-12 mr-2 object-cover"
+                        @error="handleImageError($event, variant, 'variant')"
+                      >
                       <div>
                         <p class="text-sm">
                           {{ variant.attributes?.length ? 
@@ -290,6 +300,31 @@ export default {
       console.warn('Unknown variant status:', status);
       return 'inactive';
     },
+    getImageUrl(imgUrl) {
+      console.log('Đường dẫn ảnh đầu vào:', imgUrl);
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
+    handleImageError(event, item, type) {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        id: item.id,
+        img_url: type === 'thumbnail' ? item.thumbnail : item.image_url,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+    },
     async confirmUpdateProductStatus(productId, newStatus) {
       this.confirmMessage = `Bạn có chắc chắn muốn thay đổi trạng thái sản phẩm thành "${this.statusText[newStatus]}"?`;
       this.showConfirmModal = true;
@@ -374,18 +409,6 @@ export default {
       } finally {
         this.showConfirmModal = false;
       }
-    },
-    handleConfirm() {
-      if (this.confirmCallback) {
-        this.confirmCallback();
-      }
-      this.confirmCallback = null;
-      this.showConfirmModal = false;
-    },
-    handleCancel() {
-      this.pendingStatusUpdate = null;
-      this.confirmCallback = null;
-      this.showConfirmModal = false;
     },
     handleAuthError(error, defaultMsg) {
       console.error(defaultMsg, error);

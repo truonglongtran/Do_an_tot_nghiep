@@ -16,9 +16,10 @@
         >
           <div class="seller-info">
             <img
-              :src="conversation.shop?.avatar_url || 'https://via.placeholder.com/50'"
-              alt="Shop Avatar"
+              :src="getImageUrl(conversation.shop?.avatar_url)"
+              :alt="conversation.shop?.shop_name || 'Shop'"
               class="shop-avatar"
+              @error="handleImageError($event, conversation.shop?.avatar_url, 'shop_avatar_' + conversation.seller.id)"
             />
             <div class="seller-details">
               <h3>{{ conversation.shop?.shop_name || 'Shop' }}</h3>
@@ -39,9 +40,10 @@
       <div class="chat-window" v-if="selectedSellerId">
         <div class="chat-header">
           <img
-            :src="selectedConversation?.shop?.avatar_url || 'https://via.placeholder.com/50'"
-            alt="Shop Avatar"
+            :src="getImageUrl(selectedConversation?.shop?.avatar_url)"
+            :alt="selectedConversation?.shop?.shop_name || 'Shop'"
             class="shop-avatar"
+            @error="handleImageError($event, selectedConversation?.shop?.avatar_url, 'shop_avatar_' + selectedSellerId)"
           />
           <h3>{{ selectedConversation?.shop?.shop_name || 'Chọn một shop để xem tin nhắn' }}</h3>
         </div>
@@ -163,6 +165,17 @@ export default {
         });
         console.log('API response for messages:', JSON.stringify(response.data, null, 2));
         selectedMessages.value = response.data.data.messages || [];
+        if (response.data.data.seller && response.data.data.shop) {
+          const conversation = conversations.value.find(c => c.seller.id === sellerId);
+          if (!conversation) {
+            conversations.value.push({
+              seller: response.data.data.seller,
+              shop: response.data.data.shop,
+              last_message: null,
+              unread_count: 0,
+            });
+          }
+        }
         await markMessagesAsRead(sellerId);
         const conversation = conversations.value.find(c => c.seller.id === sellerId);
         if (conversation) {
@@ -233,12 +246,12 @@ export default {
           const sellerData = sellerResponse.data.data.find(s => s.id === selectedSellerId.value) || {
             id: selectedSellerId.value,
             username: 'Unknown',
-            avatar_url: 'https://via.placeholder.com/50',
-            shop: { shop_name: 'Unknown', avatar_url: 'https://via.placeholder.com/50' },
+            avatar_url: null,
+            shop: { shop_name: 'Unknown', avatar_url: null },
           };
           conversations.value.push({
             seller: { id: selectedSellerId.value, username: sellerData.username, avatar_url: sellerData.avatar_url },
-            shop: sellerData.shop || { shop_name: 'Unknown', avatar_url: sellerData.avatar_url },
+            shop: sellerData.shop || { shop_name: 'Unknown', avatar_url: null },
             last_message: response.data.data,
             unread_count: 0,
           });
@@ -295,6 +308,31 @@ export default {
       }
     };
 
+    const getImageUrl = (imgUrl) => {
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    };
+
+    const handleImageError = (event, imgUrl, type) => {
+      console.error(`Lỗi tải ảnh ${type}:`, {
+        img_url: imgUrl,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/50?text=Ảnh+Không+Tìm+Thấy';
+    };
+
     const formatDateTime = (date) => {
       if (!date) return 'N/A';
       return new Date(date).toLocaleString('vi-VN', {
@@ -337,6 +375,8 @@ export default {
       currentBuyerId,
       selectSeller,
       sendMessage,
+      getImageUrl,
+      handleImageError,
       formatDateTime,
       selectedConversation,
     };

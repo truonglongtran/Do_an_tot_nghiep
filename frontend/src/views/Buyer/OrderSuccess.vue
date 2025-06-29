@@ -7,10 +7,10 @@
       <h1 class="text-2xl font-bold text-gray-800 mb-2">Đặt hàng thành công!</h1>
       <p class="text-gray-600 mb-4">{{ successMessage }}</p>
       <router-link
-        to="/buyer/orders"
+        to="/"
         class="inline-block bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors"
       >
-        Xem đơn hàng
+        Về trang chủ
       </router-link>
     </div>
   </div>
