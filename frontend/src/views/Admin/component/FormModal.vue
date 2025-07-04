@@ -72,7 +72,10 @@
             class="mt-1"
             :searchable="true"
             :close-on-select="false"
-            @input="touchField(field); validateField(field); field.onInput ? field.onInput($event) : null"
+            :custom-label="option => option.label"
+            :select-label="'Chọn'"
+            :deselect-label="'Bỏ chọn'"
+            @input="handleMultiselectInput(field, $event)"
             @blur="touchField(field); validateField(field)"
           >
             <template #noResult>{{ field.noResultText || 'Không tìm thấy kết quả' }}</template>
@@ -161,7 +164,7 @@ export default {
     initialData: {
       immediate: true,
       handler(newData) {
-        console.log('FormModal: Khởi tạo với dữ liệu:', newData, 'isEdit:', this.isEdit);
+        console.log('FormModal: Initializing with data:', newData, 'isEdit:', this.isEdit);
         this.initializeForm(newData);
       },
     },
@@ -169,33 +172,52 @@ export default {
       immediate: true,
       handler(newFields) {
         if (newFields && newFields.length) {
-          console.log('FormModal: Cập nhật trường, khởi tạo lại biểu mẫu');
+          console.log('FormModal: Fields updated, reinitializing form');
           this.initializeForm(this.initialData);
         }
+      },
+    },
+    'form.voucher_type': {
+      handler() {
+        this.fields.forEach(field => {
+          this.validateField(field);
+        });
       },
     },
   },
   methods: {
     initializeForm(data) {
-      console.log('FormModal: Khởi tạo biểu mẫu với dữ liệu:', data);
+      console.log('FormModal: Initializing form with data:', data);
       const formData = {};
       this.errors = {};
       this.touched = {};
       this.previewUrl = {};
+
       this.fields.forEach((field) => {
-        if (field.type === 'file') {
+        if (field.type === 'multiselect') {
+          const options = field.options || [];
+          formData[field.name] = (data && data[field.name] && Array.isArray(data[field.name]))
+            ? data[field.name]
+                .map(id => {
+                  const parsedId = parseInt(id, 10);
+                  const option = options.find(opt => opt.value === parsedId);
+                  return option || { value: parsedId, label: `Unknown (${id})` };
+                })
+                .filter(opt => opt.value !== undefined && !isNaN(opt.value))
+            : field.defaultValue || [];
+        } else if (field.type === 'checkbox-group') {
+          formData[field.name] = (data && data[field.name] && Array.isArray(data[field.name]))
+            ? data[field.name].map(id => parseInt(id, 10)).filter(id => !isNaN(id))
+            : field.defaultValue || [];
+        } else if (field.type === 'checkbox') {
+          formData[field.name] = (data && data[field.name] !== undefined)
+            ? !!data[field.name]
+            : field.defaultValue || false;
+        } else if (field.type === 'file') {
           formData[field.name] = (data && data[field.name]) || '';
           if (data[field.name]) {
             this.previewUrl[field.name] = this.getImageUrl(data[field.name]);
           }
-        } else if (field.type === 'multiselect') {
-          formData[field.name] = (data && data[field.name]) || field.defaultValue || [];
-        } else if (field.type === 'checkbox-group') {
-          formData[field.name] = (data && data[field.name]) || field.defaultValue || [];
-        } else if (field.type === 'checkbox') {
-          formData[field.name] = (data && data[field.name] !== undefined)
-            ? data[field.name]
-            : field.defaultValue || false;
         } else {
           formData[field.name] = (data && data[field.name] !== undefined)
             ? data[field.name]
@@ -203,26 +225,24 @@ export default {
         }
       });
       this.form = { ...formData };
-      console.log('FormModal: Biểu mẫu đã khởi tạo:', this.form);
+      console.log('FormModal: Form initialized:', this.form);
+    },
+    handleMultiselectInput(field, value) {
+      console.log(`FormModal: Multiselect input for ${field.name}:`, value);
+      this.form[field.name] = value || [];
+      this.validateField(field);
     },
     getImageUrl(imgUrl) {
-      console.log('Đường dẫn ảnh đầu vào:', imgUrl);
       if (!imgUrl) {
-        console.warn('Không có đường dẫn ảnh, sử Roselle sử dụng ảnh placeholder');
+        console.warn('No image URL provided, using placeholder');
         return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
       }
-
-      // Xử lý URL bên ngoài (bắt đầu bằng http:// hoặc https://)
       if (/^https?:\/\//.test(imgUrl)) {
-        console.log('Sử dụng URL bên ngoài:', imgUrl);
-        return `${imgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
+        return `${imgUrl}?t=${new Date().getTime()}`;
       }
-
-      // Xử lý đường dẫn cục bộ (ví dụ: /storage/banners/56.png hoặc banners/56.png)
       const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
-      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, ''); // Loại bỏ /storage/ hoặc /
-      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
-      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
       return finalUrl;
     },
     handleFileChange(event, field) {
@@ -249,11 +269,10 @@ export default {
       this.validateField(field);
     },
     handleImageError(event, field) {
-      console.error('Lỗi tải ảnh:', {
+      console.error('Error loading image:', {
         field_label: field.label,
         img_url: this.form[field.name] || this.previewUrl[field.name],
         attempted_url: event.target.src,
-        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
       });
       event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
     },
@@ -261,10 +280,13 @@ export default {
       this.touched[field.name] = true;
     },
     isFieldApplicable(field) {
-      return true;
+      if (field.name === 'shop_ids') return this.form.voucher_type === 'shop';
+      if (field.name === 'product_ids') return this.form.voucher_type === 'product';
+      if (field.name === 'shipping_partner_ids' || field.name === 'shipping_only') return this.form.voucher_type === 'shipping';
+      return !field.showWhen || field.showWhen();
     },
     isFieldVisible(field) {
-      return this.isFieldApplicable(field);
+      return this.isFieldApplicable(field) || ['code', 'voucher_type', 'discount_type', 'discount_value', 'min_order_amount', 'usage_limit', 'start_date', 'end_date'].includes(field.name);
     },
     validateField(field) {
       if (!this.touched[field.name] && !this.isSubmitting) return;
@@ -272,10 +294,6 @@ export default {
       this.errors[field.name] = '';
 
       if (field.required && this.isFieldApplicable(field)) {
-        if (field.type === 'file' && (!value || (typeof value === 'string' && !value) && !this.isEdit)) {
-          this.errors[field.name] = `${field.label} là bắt buộc.`;
-          return;
-        }
         if (field.type === 'multiselect' && (!value || !value.length)) {
           this.errors[field.name] = `Vui lòng chọn ít nhất một ${field.label.toLowerCase()}.`;
           return;
@@ -284,13 +302,22 @@ export default {
           this.errors[field.name] = `Vui lòng chọn ít nhất một ${field.label.toLowerCase()}.`;
           return;
         }
-        if (field.type !== 'file' && field.type !== 'multiselect' && field.type !== 'checkbox-group' && (!value && value !== 0)) {
+        if (field.type !== 'multiselect' && field.type !== 'checkbox-group' && (!value && value !== 0)) {
           this.errors[field.name] = `${field.label} là bắt buộc.`;
           return;
         }
       }
 
-      if (field.rules && value) {
+      if (field.type === 'multiselect' && value && value.length) {
+        value.forEach(item => {
+          const id = typeof item === 'object' ? parseInt(item.value, 10) : parseInt(item, 10);
+          if (isNaN(id)) {
+            this.errors[field.name] = `Giá trị trong ${field.label} phải là số nguyên.`;
+          }
+        });
+      }
+
+      if (field.rules && value !== undefined && value !== '') {
         for (const rule of field.rules) {
           if (!rule.validator(value)) {
             this.errors[field.name] = rule.message;
@@ -300,7 +327,7 @@ export default {
       }
     },
     handleSubmit() {
-      console.log('FormModal: Gửi biểu mẫu:', this.form);
+      console.log('FormModal: Submitting form:', this.form);
       this.isSubmitting = true;
       let valid = true;
       this.fields.forEach(field => {
@@ -311,23 +338,60 @@ export default {
 
       if (!valid) {
         this.isSubmitting = false;
-        console.log('FormModal: Lỗi xác thực:', this.errors);
+        console.log('FormModal: Validation errors:', this.errors);
         alert('Vui lòng kiểm tra các lỗi trong biểu mẫu.');
         return;
       }
 
       const formData = new FormData();
+      const voucherType = this.form.voucher_type;
+
       this.fields.forEach(field => {
-        if (field.type === 'file' && this.form[field.name] instanceof File) {
+        // Skip non-applicable fields based on voucher_type
+        if (voucherType === 'platform' && ['shop_ids', 'product_ids', 'shipping_partner_ids', 'shipping_only'].includes(field.name)) {
+          return;
+        }
+        if (voucherType === 'shop' && ['product_ids', 'shipping_partner_ids', 'shipping_only'].includes(field.name)) {
+          return;
+        }
+        if (voucherType === 'product' && ['shop_ids', 'shipping_partner_ids', 'shipping_only'].includes(field.name)) {
+          return;
+        }
+        if (voucherType === 'shipping' && ['shop_ids', 'product_ids'].includes(field.name)) {
+          return;
+        }
+
+        if (field.type === 'multiselect') {
+          const value = this.form[field.name] || [];
+          value.forEach(item => {
+            const id = parseInt(typeof item === 'object' ? item.value : item, 10);
+            if (!isNaN(id)) {
+              // Explicitly append as a number to ensure backend receives an integer
+              formData.append(`${field.name}[]`, id.toString());
+            } else {
+              console.warn(`Skipping invalid ${field.name} value:`, item);
+            }
+          });
+        } else if (field.type === 'checkbox-group') {
+          const value = this.form[field.name] || [];
+          value.forEach(item => {
+            const id = parseInt(item, 10);
+            if (!isNaN(id)) {
+              formData.append(`${field.name}[]`, id.toString());
+            } else {
+              console.warn(`Skipping invalid ${field.name} value:`, item);
+            }
+          });
+        } else if (field.type === 'checkbox') {
+          formData.append(field.name, this.form[field.name] ? '1' : '0');
+        } else if (field.type === 'file' && this.form[field.name] instanceof File) {
           formData.append(field.name, this.form[field.name]);
-        } else if (field.type === 'multiselect' || field.type === 'checkbox-group') {
-          formData.append(field.name, JSON.stringify(this.form[field.name]));
         } else {
           formData.append(field.name, this.form[field.name] || '');
         }
       });
 
-      // Ghi log FormData để kiểm tra
+      // Log FormData for debugging
       for (let [key, value] of formData.entries()) {
         console.log(`FormData: ${key} = ${value instanceof File ? value.name : value}`);
       }

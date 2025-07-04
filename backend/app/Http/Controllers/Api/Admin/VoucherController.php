@@ -80,14 +80,15 @@ class VoucherController extends Controller
                     PlatformVoucher::create(['voucher_id' => $voucher->id]);
                 } elseif ($validated['voucher_type'] === 'shop') {
                     if (!empty($validated['shop_ids'])) {
-                        foreach ($validated['shop_ids'] as $shop_id) {
+                        $shop_ids = array_map('intval', $validated['shop_ids']); // Cast to integers
+                        foreach ($shop_ids as $shop_id) {
                             if (!is_int($shop_id)) {
                                 \Log::error('Invalid shop_id type: ' . json_encode($shop_id));
                                 throw new \Exception('shop_ids phải chứa các số nguyên');
                             }
                         }
                         $voucher->shopVoucher()->createMany(
-                            array_map(fn($shop_id) => ['shop_id' => $shop_id], $validated['shop_ids'])
+                            array_map(fn($shop_id) => ['shop_id' => $shop_id], $shop_ids)
                         );
                     } else {
                         \Log::warning('No shop_ids provided for shop voucher');
@@ -99,26 +100,28 @@ class VoucherController extends Controller
                         'shipping_only' => $validated['shipping_only'],
                     ]);
                     if (!empty($validated['shipping_partner_ids'])) {
-                        foreach ($validated['shipping_partner_ids'] as $partner_id) {
+                        $shipping_partner_ids = array_map('intval', $validated['shipping_partner_ids']); // Cast to integers
+                        foreach ($shipping_partner_ids as $partner_id) {
                             if (!is_int($partner_id)) {
                                 \Log::error('Invalid shipping_partner_id type: ' . json_encode($partner_id));
                                 throw new \Exception('shipping_partner_ids phải chứa các số nguyên');
                             }
                         }
                         $shippingVoucher->shippingPartners()->createMany(
-                            array_map(fn($partner_id) => ['shipping_partner_id' => $partner_id], $validated['shipping_partner_ids'])
+                            array_map(fn($partner_id) => ['shipping_partner_id' => $partner_id], $shipping_partner_ids)
                         );
                     }
                 } elseif ($validated['voucher_type'] === 'product') {
                     if (!empty($validated['product_ids'])) {
-                        foreach ($validated['product_ids'] as $product_id) {
+                        $product_ids = array_map('intval', $validated['product_ids']); // Cast to integers
+                        foreach ($product_ids as $product_id) {
                             if (!is_int($product_id)) {
                                 \Log::error('Invalid product_id type: ' . json_encode($product_id));
                                 throw new \Exception('product_ids phải chứa các số nguyên');
                             }
                         }
                         $voucher->products()->createMany(
-                            array_map(fn($product_id) => ['product_id' => $product_id], $validated['product_ids'])
+                            array_map(fn($product_id) => ['product_id' => $product_id], $product_ids)
                         );
                     } else {
                         \Log::warning('No product_ids provided for product voucher');
@@ -190,14 +193,15 @@ class VoucherController extends Controller
                     PlatformVoucher::create(['voucher_id' => $voucher->id]);
                 } elseif ($validated['voucher_type'] === 'shop') {
                     if (!empty($validated['shop_ids'])) {
-                        foreach ($validated['shop_ids'] as $shop_id) {
+                        $shop_ids = array_map('intval', $validated['shop_ids']); // Cast to integers
+                        foreach ($shop_ids as $shop_id) {
                             if (!is_int($shop_id)) {
                                 \Log::error('Invalid shop_id type: ' . json_encode($shop_id));
                                 throw new \Exception('shop_ids phải chứa các số nguyên');
                             }
                         }
                         $voucher->shopVoucher()->createMany(
-                            array_map(fn($shop_id) => ['shop_id' => $shop_id], $validated['shop_ids'])
+                            array_map(fn($shop_id) => ['shop_id' => $shop_id], $shop_ids)
                         );
                     } else {
                         \Log::warning('No shop_ids provided for shop voucher update');
@@ -209,26 +213,28 @@ class VoucherController extends Controller
                         'shipping_only' => $validated['shipping_only'],
                     ]);
                     if (!empty($validated['shipping_partner_ids'])) {
-                        foreach ($validated['shipping_partner_ids'] as $partner_id) {
+                        $shipping_partner_ids = array_map('intval', $validated['shipping_partner_ids']); // Cast to integers
+                        foreach ($shipping_partner_ids as $partner_id) {
                             if (!is_int($partner_id)) {
                                 \Log::error('Invalid shipping_partner_id type: ' . json_encode($partner_id));
                                 throw new \Exception('shipping_partner_ids phải chứa các số nguyên');
                             }
                         }
                         $shippingVoucher->shippingPartners()->createMany(
-                            array_map(fn($partner_id) => ['shipping_partner_id' => $partner_id], $validated['shipping_partner_ids'])
+                            array_map(fn($partner_id) => ['shipping_partner_id' => $partner_id], $shipping_partner_ids)
                         );
                     }
                 } elseif ($validated['voucher_type'] === 'product') {
                     if (!empty($validated['product_ids'])) {
-                        foreach ($validated['product_ids'] as $product_id) {
+                        $product_ids = array_map('intval', $validated['product_ids']); // Cast to integers
+                        foreach ($product_ids as $product_id) {
                             if (!is_int($product_id)) {
                                 \Log::error('Invalid product_id type: ' . json_encode($product_id));
                                 throw new \Exception('product_ids phải chứa các số nguyên');
                             }
                         }
                         $voucher->products()->createMany(
-                            array_map(fn($product_id) => ['product_id' => $product_id], $validated['product_ids'])
+                            array_map(fn($product_id) => ['product_id' => $product_id], $product_ids)
                         );
                     } else {
                         \Log::warning('No product_ids provided for product voucher update');

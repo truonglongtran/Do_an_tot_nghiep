@@ -6,9 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Report;
+use App\Models\Shop;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
 class OrderController extends Controller
@@ -19,11 +19,11 @@ class OrderController extends Controller
             $sellerId = $request->user()->id;
             $query = Order::where('seller_id', $sellerId)
                 ->with([
-                    'buyer:id,email', // Load email và name của người mua
-                    'items.product:id,name', // Load tên sản phẩm
-                    'items.productVariant:id,price', // Load giá của biến thể
-                    'items.productVariant.variantAttributes.attribute:id,name', // Load tên thuộc tính
-                    'items.productVariant.variantAttributes.attributeValue:id,value' // Load giá trị thuộc tính
+                    'buyer:id,email',
+                    'items.product:id,name',
+                    'items.productVariant:id,price',
+                    'items.productVariant.variantAttributes.attribute:id,name',
+                    'items.productVariant.variantAttributes.attributeValue:id,value'
                 ]);
 
             Log::info('Fetching orders với relations', ['seller_id' => $sellerId]);
@@ -100,6 +100,7 @@ class OrderController extends Controller
             ], 404);
         }
     }
+
     public function revenue(Request $request)
     {
         try {
@@ -111,11 +112,11 @@ class OrderController extends Controller
 
             if ($filter === 'daily') {
                 $query->whereDate('settled_at', Carbon::today());
-            } elseif ($filter === 'weekly') {
-                $query->whereBetween('settled_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]);
             } elseif ($filter === 'monthly') {
                 $query->whereMonth('settled_at', Carbon::now()->month)
                       ->whereYear('settled_at', Carbon::now()->year);
+            } else {
+                throw new \Exception('Loại bộ lọc không hợp lệ');
             }
 
             $totalRevenue = $query->sum('total');
@@ -176,66 +177,71 @@ class OrderController extends Controller
             $sellerId = $request->user()->id;
             $filter = $request->input('filter', 'daily');
 
+            // Fetch shop name, fallback to user name if shop not found
+            $shop = Shop::where('owner_id', $sellerId)->first();
+            $shopName = $shop ? $shop->name : $request->user()->name;
+
+            // Build query for orders
             $query = Order::where('seller_id', $sellerId)
                 ->where('settled_status', 'settled');
 
             if ($filter === 'daily') {
                 $query->whereDate('settled_at', Carbon::today());
-            } elseif ($filter === 'weekly') {
-                $query->whereBetween('settled_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]);
             } elseif ($filter === 'monthly') {
                 $query->whereMonth('settled_at', Carbon::now()->month)
                       ->whereYear('settled_at', Carbon::now()->year);
+            } else {
+                throw new \Exception('Loại bộ lọc không hợp lệ');
             }
 
+            // Calculate total revenue and orders
+            $totalRevenue = $query->sum('total');
+            $totalOrders = $query->count();
             $orders = $query->with(['items.product', 'items.productVariant'])->get();
 
-            // Tạo thư mục reports nếu chưa tồn tại
-            $directory = storage_path('app/public/reports');
-            if (!file_exists($directory)) {
-                mkdir($directory, 0755, true);
-            }
-
-            $filename = 'reports/revenue_' . $filter . '_' . Carbon::now()->timestamp . '.csv';
-            $filePath = storage_path('app/public/' . $filename);
-            $file = fopen($filePath, 'w');
-            if ($file === false) {
-                throw new \Exception('Không thể mở file để ghi: ' . $filePath);
-            }
-
-            fputcsv($file, ['Order ID', 'Date', 'Total', 'Items']);
+            // Generate CSV content
+            $csvData = [];
+            $csvData[] = ['Shop Name', $shopName];
+            $csvData[] = ['Report Type', $filter];
+            $csvData[] = ['Total Revenue', number_format($totalRevenue, 2, '.', '')];
+            $csvData[] = ['Total Orders', $totalOrders];
+            $csvData[] = []; // Empty row for separation
+            $csvData[] = ['Order ID', 'Date', 'Total', 'Items'];
 
             foreach ($orders as $order) {
                 $items = $order->items->map(function ($item) {
                     return $item->product->name . ' (' . $item->quantity . ')';
                 })->implode(', ');
-                fputcsv($file, [
+                $csvData[] = [
                     $order->id,
                     $order->settled_at->toDateTimeString(),
-                    $order->total,
+                    number_format($order->total, 2, '.', ''),
                     $items,
-                ]);
+                ];
             }
-            fclose($file);
 
-            $report = Report::create([
-                'report_type' => $filter,
-                'file_url' => Storage::url($filename),
-                'created_at' => Carbon::now(),
-            ]);
+            // Create CSV content as a string
+            $csvContent = '';
+            foreach ($csvData as $row) {
+                $csvContent .= implode(',', array_map(function ($value) {
+                    return '"' . str_replace('"', '""', $value) . '"';
+                }, $row)) . "\n";
+            }
 
-            Log::info('Report exported', [
+            // Log the export action
+            Log::info('Report exported for seller', [
                 'seller_id' => $sellerId,
-                'report_id' => $report->id,
-                'file_url' => $report->file_url,
+                'filter' => $filter,
+                'shop_name' => $shopName,
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'file_url' => $report->file_url,
-                ],
-            ]);
+            // Return CSV as a download response
+            $headers = [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="revenue_' . $filter . '_' . Carbon::now()->timestamp . '.csv"',
+            ];
+
+            return response($csvContent, 200, $headers);
         } catch (\Exception $e) {
             Log::error('Error exporting report', [
                 'seller_id' => $request->user()->id,
@@ -247,5 +253,4 @@ class OrderController extends Controller
             ], 500);
         }
     }
-    
 }

@@ -2,7 +2,7 @@
   <div class="min-h-screen flex items-center justify-center bg-gray-100">
     <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
       <h2 class="text-2xl font-bold mb-6 text-center">Đăng nhập {{ roleLabel }}</h2>
-      <form @submit.prevent="login">
+      <form @submit.prevent="login" novalidate>
         <div class="mb-4">
           <label class="block text-gray-700">Email</label>
           <input
@@ -10,7 +10,6 @@
             type="email"
             class="w-full p-2 border rounded"
             :class="{ 'border-red-500': errors.email }"
-            required
           />
           <p v-if="errors.email" class="text-red-500 text-sm mt-1">{{ errors.email }}</p>
         </div>
@@ -21,7 +20,6 @@
             type="password"
             class="w-full p-2 border rounded"
             :class="{ 'border-red-500': errors.password }"
-            required
           />
           <p v-if="errors.password" class="text-red-500 text-sm mt-1">{{ errors.password }}</p>
         </div>
@@ -87,8 +85,20 @@ export default {
   },
   methods: {
     async login() {
-      this.isLoading = true;
+      // Reset lỗi trước khi kiểm tra
       this.errors = { email: '', password: '' };
+
+      // Kiểm tra trường email và password
+      if (!this.form.email) {
+        this.errors.email = 'Vui lòng nhập email';
+        return;
+      }
+      if (!this.form.password) {
+        this.errors.password = 'Vui lòng nhập mật khẩu';
+        return;
+      }
+
+      this.isLoading = true;
 
       try {
         console.log('Gửi yêu cầu tới:', this.loginEndpoint);

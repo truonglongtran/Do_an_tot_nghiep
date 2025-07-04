@@ -107,8 +107,4 @@ class User extends Authenticatable
         return $this->hasMany(Message::class, 'receiver_id');
     }
 
-    public function loyaltyPoints()
-    {
-        return $this->hasMany(LoyaltyPoint::class, 'user_id');
-    }
 }

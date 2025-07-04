@@ -19,7 +19,7 @@ return new class extends Migration
             $table->id();
             $table->enum('report_type', ['daily', 'monthly', 'yearly']);
             $table->string('file_url')->nullable();
-            $table->string('shop_name');
+            $table->string('shop_name')->default('All Shops'); // Default to 'All Shops' for combined reports
             $table->timestamps();
         });
     }

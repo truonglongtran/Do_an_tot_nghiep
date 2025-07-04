@@ -5,7 +5,6 @@
       <label class="mr-2">Chọn khoảng thời gian:</label>
       <select v-model="filter" @change="fetchRevenue" class="p-2 border rounded">
         <option value="daily">Hàng ngày</option>
-        <option value="weekly">Hàng tuần</option>
         <option value="monthly">Hàng tháng</option>
       </select>
     </div>
@@ -90,8 +89,20 @@ export default {
         const response = await axios.get('/seller/orders/export-report', {
           params: { filter: filter.value },
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          responseType: 'blob', // Expect binary data (CSV file)
         });
-        window.open(response.data.data.file_url, '_blank');
+
+        // Create a blob from the response data
+        const blob = new Blob([response.data], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `revenue_${filter.value}_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
         alert('Xuất báo cáo thành công');
       } catch (err) {
         error.value = err.response?.data?.message || 'Lỗi khi xuất báo cáo';

@@ -446,12 +446,6 @@ const routes = [
         component: () => import('@/views/Buyer/Addresses.vue'),
         meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
       },
-      {
-        path: 'loyalty-points',
-        name: 'LoyaltyPoints',
-        component: () => import('@/views/Buyer/LoyaltyPoints.vue'),
-        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
-      },
     ],
   },
   {

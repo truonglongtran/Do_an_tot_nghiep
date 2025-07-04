@@ -31,7 +31,7 @@ use App\Http\Controllers\Api\Buyer\ProductController;
 use App\Http\Controllers\Api\Buyer\ShopController;
 use App\Http\Controllers\Api\Buyer\MessageController;
 use App\Http\Controllers\Api\Buyer\AddressController;
-use App\Http\Controllers\Api\Buyer\LoyaltyPointController;
+// use App\Http\Controllers\Api\Buyer\LoyaltyPointController;
 use App\Http\Controllers\Api\Buyer\BannerController;
 use App\Http\Controllers\Api\Buyer\ShippingMethodController;
 use App\Http\Controllers\Api\Buyer\VoucherController;
@@ -127,7 +127,8 @@ Route::prefix('admin')->group(function () {
         Route::get('/reviews/{shopId}', [AdminReviewController::class, 'showReviews'])->name('reviews.showReviews');
 
         // Report management
-        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports', [ReportController::class, 'index']);
+        Route::post('/reports/generate', [ReportController::class, 'generateReports']);
 
         // Banner management
         Route::apiResource('/banners', AdminBannerController::class)->names([
@@ -240,7 +241,7 @@ Route::prefix('buyer')->group(function () {
         Route::delete('/addresses/{id}', [AddressController::class, 'destroy']);
         Route::put('/addresses/{id}/set-default', [AddressController::class, 'setDefault']);
 
-        Route::get('/loyalty-points', [LoyaltyPointController::class, 'index']);
+        // Route::get('/loyalty-points', [LoyaltyPointController::class, 'index']);
 
         Route::get('/chats', [MessageController::class, 'index']);
         Route::get('/chats/detail', [MessageController::class, 'show']);
