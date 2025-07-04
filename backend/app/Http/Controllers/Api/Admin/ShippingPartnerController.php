@@ -111,9 +111,9 @@ class ShippingPartnerController extends Controller
         try {
             $partner = ShippingPartner::findOrFail($id);
             $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'api_url' => 'required|url|max:255',
-                'status' => 'required|in:active,inactive',
+                'name' => 'sometimes|string|max:255',
+                'api_url' => 'sometimes|url|max:255',
+                'status' => 'sometimes|in:active,inactive',
             ]);
 
             $partner->update($validated);
@@ -136,6 +136,37 @@ class ShippingPartnerController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
             return response()->json(['error' => 'Unable to update shipping partner'], 500);
+        }
+    }
+
+    public function updateStatus(Request $request, $id)
+    {
+        try {
+            $partner = ShippingPartner::findOrFail($id);
+            $validated = $request->validate([
+                'status' => 'required|in:active,inactive',
+            ]);
+
+            $partner->update(['status' => $validated['status']]);
+
+            return response()->json([
+                'message' => 'Shipping partner status updated successfully',
+                'partner' => [
+                    'id' => $partner->id,
+                    'name' => $partner->name,
+                    'api_url' => $partner->api_url,
+                    'status' => $partner->status,
+                    'shops' => $partner->shops->pluck('shop_name'),
+                    'created_at' => $partner->created_at ? $partner->created_at->toIso8601String() : null,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error updating shipping partner status', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['error' => 'Unable to update shipping partner status'], 500);
         }
     }
 

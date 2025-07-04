@@ -1,7 +1,6 @@
 version: "3.8"
 
 services:
-  # Dịch vụ Laravel (Backend)
   app:
     build:
       context: ./backend
@@ -14,10 +13,8 @@ services:
       - mysql
     networks:
       - app-network
-    command: sh -c "composer install && php artisan serve --host=0.0.0.0 --port=8000"
+    command: sh -c "composer install && rm -f /var/www/public/storage && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=8000"
 
-
-  # Dịch vụ Vue 3 (Frontend)
   vue:
     build:
       context: ./frontend
@@ -30,7 +27,6 @@ services:
     networks:
       - app-network
 
-  # Dịch vụ MySQL (Database)
   mysql:
     image: mysql:8.0
     container_name: mysql_db

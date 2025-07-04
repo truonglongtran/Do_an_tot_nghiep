@@ -1,17 +1,37 @@
 <template>
-  <div
-    v-if="show"
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-  >
-    <div
-      class="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto"
-    >
+  <div v-if="show" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
       <h2 class="text-xl font-bold mb-4">{{ title }}</h2>
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <div v-for="field in fields" :key="field.name" class="mb-4" v-show="isFieldVisible(field)">
           <label class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+          <div v-if="field.type === 'file'" class="mt-1">
+            <input
+              type="file"
+              :accept="field.accept || 'image/*'"
+              @change="handleFileChange($event, field)"
+              :required="field.required && isFieldApplicable(field) && !isEdit"
+              :disabled="!isFieldApplicable(field)"
+              class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              :class="{ 'border-red-500': errors[field.name] && touched[field.name] }"
+            />
+            <img
+              v-if="form[field.name] && typeof form[field.name] === 'string' && isEdit"
+              :src="getImageUrl(form[field.name])"
+              alt="Preview"
+              class="mt-2 w-32 h-32 object-cover rounded"
+              @error="handleImageError($event, field)"
+            />
+            <img
+              v-else-if="previewUrl[field.name]"
+              :src="previewUrl[field.name]"
+              alt="Preview"
+              class="mt-2 w-32 h-32 object-cover rounded"
+              @error="handleImageError($event, field)"
+            />
+          </div>
           <input
-            v-if="['text', 'email', 'password', 'number', 'date', 'url', 'datetime-local'].includes(field.type)"
+            v-else-if="['text', 'email', 'password', 'number', 'date', 'url', 'datetime-local'].includes(field.type)"
             v-model="form[field.name]"
             :type="field.type"
             :placeholder="field.placeholder"
@@ -35,11 +55,7 @@
             <option v-if="field.placeholder" value="" disabled>
               {{ field.placeholder }}
             </option>
-            <option
-              v-for="option in field.options"
-              :key="option.value"
-              :value="option.value"
-            >
+            <option v-for="option in field.options" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
           </select>
@@ -56,16 +72,16 @@
             class="mt-1"
             :searchable="true"
             :close-on-select="false"
-            @input="touchField(field); validateField(field); field.onInput ? field.onInput($event) : null"
+            :custom-label="option => option.label"
+            :select-label="'Chọn'"
+            :deselect-label="'Bỏ chọn'"
+            @input="handleMultiselectInput(field, $event)"
             @blur="touchField(field); validateField(field)"
           >
             <template #noResult>{{ field.noResultText || 'Không tìm thấy kết quả' }}</template>
             <template #noOptions>{{ field.emptyOptionsText || 'Không có tùy chọn nào' }}</template>
           </multiselect>
-          <div
-            v-else-if="field.type === 'checkbox'"
-            class="mt-1 flex items-center"
-          >
+          <div v-else-if="field.type === 'checkbox'" class="mt-1 flex items-center">
             <input
               v-model="form[field.name]"
               type="checkbox"
@@ -75,15 +91,8 @@
             />
             <label class="ml-2 text-sm text-gray-700">{{ field.label }}</label>
           </div>
-          <div
-            v-else-if="field.type === 'checkbox-group'"
-            class="mt-1 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2"
-          >
-            <label
-              v-for="option in field.options"
-              :key="option.value"
-              class="flex items-center"
-            >
+          <div v-else-if="field.type === 'checkbox-group'" class="mt-1 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2">
+            <label v-for="option in field.options" :key="option.value" class="flex items-center">
               <input
                 type="checkbox"
                 :value="option.value"
@@ -95,16 +104,10 @@
               <span class="ml-2 text-sm text-gray-700">{{ option.label || 'N/A' }}</span>
             </label>
           </div>
-          <p
-            v-if="errors[field.name] && touched[field.name]"
-            class="text-red-500 text-sm mt-1"
-          >
+          <p v-if="errors[field.name] && touched[field.name]" class="text-red-500 text-sm mt-1">
             {{ errors[field.name] }}
           </p>
-          <p
-            v-else-if="field.type === 'multiselect' && field.options && !field.options.length"
-            class="text-red-500 text-sm mt-1"
-          >
+          <p v-else-if="field.type === 'multiselect' && field.options && !field.options.length" class="text-red-500 text-sm mt-1">
             {{ field.emptyOptionsText || 'Không có tùy chọn nào' }}
           </p>
         </div>
@@ -119,7 +122,7 @@
           <button
             type="submit"
             class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            :disabled="isSubmitting"
+            :disabled="isSubmitting || hasErrors"
           >
             {{ isEdit ? 'Cập nhật' : modalMode === 'delete' ? 'Xác nhận' : 'Thêm' }}
           </button>
@@ -149,11 +152,12 @@ export default {
       errors: {},
       touched: {},
       isSubmitting: false,
+      previewUrl: {},
     };
   },
   computed: {
     hasErrors() {
-      return Object.values(this.errors).some(error => error && this.touched[this.errors.key]);
+      return Object.keys(this.errors).some(key => this.errors[key] && this.touched[key]);
     },
   },
   watch: {
@@ -173,6 +177,13 @@ export default {
         }
       },
     },
+    'form.voucher_type': {
+      handler() {
+        this.fields.forEach(field => {
+          this.validateField(field);
+        });
+      },
+    },
   },
   methods: {
     initializeForm(data) {
@@ -180,24 +191,90 @@ export default {
       const formData = {};
       this.errors = {};
       this.touched = {};
+      this.previewUrl = {};
+
       this.fields.forEach((field) => {
         if (field.type === 'multiselect') {
-          formData[field.name] = (data && data[field.name]) || field.defaultValue || [];
+          const options = field.options || [];
+          formData[field.name] = (data && data[field.name] && Array.isArray(data[field.name]))
+            ? data[field.name]
+                .map(id => {
+                  const parsedId = parseInt(id, 10);
+                  const option = options.find(opt => opt.value === parsedId);
+                  return option || { value: parsedId, label: `Unknown (${id})` };
+                })
+                .filter(opt => opt.value !== undefined && !isNaN(opt.value))
+            : field.defaultValue || [];
         } else if (field.type === 'checkbox-group') {
-          formData[field.name] = (data && data[field.name]) || field.defaultValue || [];
+          formData[field.name] = (data && data[field.name] && Array.isArray(data[field.name]))
+            ? data[field.name].map(id => parseInt(id, 10)).filter(id => !isNaN(id))
+            : field.defaultValue || [];
         } else if (field.type === 'checkbox') {
           formData[field.name] = (data && data[field.name] !== undefined)
-            ? data[field.name]
+            ? !!data[field.name]
             : field.defaultValue || false;
+        } else if (field.type === 'file') {
+          formData[field.name] = (data && data[field.name]) || '';
+          if (data[field.name]) {
+            this.previewUrl[field.name] = this.getImageUrl(data[field.name]);
+          }
         } else {
           formData[field.name] = (data && data[field.name] !== undefined)
             ? data[field.name]
             : field.defaultValue || '';
         }
-        // Do not validate during initialization
       });
       this.form = { ...formData };
       console.log('FormModal: Form initialized:', this.form);
+    },
+    handleMultiselectInput(field, value) {
+      console.log(`FormModal: Multiselect input for ${field.name}:`, value);
+      this.form[field.name] = value || [];
+      this.validateField(field);
+    },
+    getImageUrl(imgUrl) {
+      if (!imgUrl) {
+        console.warn('No image URL provided, using placeholder');
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+      if (/^https?:\/\//.test(imgUrl)) {
+        return `${imgUrl}?t=${new Date().getTime()}`;
+      }
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, '');
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`;
+      return finalUrl;
+    },
+    handleFileChange(event, field) {
+      const file = event.target.files[0];
+      this.touched[field.name] = true;
+      if (file) {
+        const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!validImageTypes.includes(file.type)) {
+          this.errors[field.name] = 'Vui lòng chọn file ảnh (JPEG, PNG, GIF hoặc WEBP).';
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          this.errors[field.name] = 'Kích thước file không được vượt quá 5MB.';
+          return;
+        }
+        this.form[field.name] = file;
+        this.previewUrl[field.name] = URL.createObjectURL(file);
+        this.errors[field.name] = '';
+      } else {
+        this.form[field.name] = '';
+        this.previewUrl[field.name] = '';
+        this.errors[field.name] = field.required && !this.isEdit ? `${field.label} là bắt buộc.` : '';
+      }
+      this.validateField(field);
+    },
+    handleImageError(event, field) {
+      console.error('Error loading image:', {
+        field_label: field.label,
+        img_url: this.form[field.name] || this.previewUrl[field.name],
+        attempted_url: event.target.src,
+      });
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
     },
     touchField(field) {
       this.touched[field.name] = true;
@@ -206,13 +283,13 @@ export default {
       if (field.name === 'shop_ids') return this.form.voucher_type === 'shop';
       if (field.name === 'product_ids') return this.form.voucher_type === 'product';
       if (field.name === 'shipping_partner_ids' || field.name === 'shipping_only') return this.form.voucher_type === 'shipping';
-      return true;
+      return !field.showWhen || field.showWhen();
     },
     isFieldVisible(field) {
       return this.isFieldApplicable(field) || ['code', 'voucher_type', 'discount_type', 'discount_value', 'min_order_amount', 'usage_limit', 'start_date', 'end_date'].includes(field.name);
     },
     validateField(field) {
-      if (!this.touched[field.name] && !this.isSubmitting) return; // Skip validation if not touched or submitting
+      if (!this.touched[field.name] && !this.isSubmitting) return;
       const value = this.form[field.name];
       this.errors[field.name] = '';
 
@@ -231,7 +308,16 @@ export default {
         }
       }
 
-      if (field.rules && value) {
+      if (field.type === 'multiselect' && value && value.length) {
+        value.forEach(item => {
+          const id = typeof item === 'object' ? parseInt(item.value, 10) : parseInt(item, 10);
+          if (isNaN(id)) {
+            this.errors[field.name] = `Giá trị trong ${field.label} phải là số nguyên.`;
+          }
+        });
+      }
+
+      if (field.rules && value !== undefined && value !== '') {
         for (const rule of field.rules) {
           if (!rule.validator(value)) {
             this.errors[field.name] = rule.message;
@@ -245,7 +331,7 @@ export default {
       this.isSubmitting = true;
       let valid = true;
       this.fields.forEach(field => {
-        this.touched[field.name] = true; // Mark all fields as touched on submit
+        this.touched[field.name] = true;
         this.validateField(field);
         if (this.errors[field.name]) valid = false;
       });
@@ -253,19 +339,64 @@ export default {
       if (!valid) {
         this.isSubmitting = false;
         console.log('FormModal: Validation errors:', this.errors);
+        alert('Vui lòng kiểm tra các lỗi trong biểu mẫu.');
         return;
       }
 
-      const payload = { ...this.form };
+      const formData = new FormData();
+      const voucherType = this.form.voucher_type;
 
-      if (payload.voucher_type !== 'shop') delete payload.shop_ids;
-      if (payload.voucher_type !== 'product') delete payload.product_ids;
-      if (payload.voucher_type !== 'shipping') {
-        delete payload.shipping_partner_ids;
-        delete payload.shipping_only;
+      this.fields.forEach(field => {
+        // Skip non-applicable fields based on voucher_type
+        if (voucherType === 'platform' && ['shop_ids', 'product_ids', 'shipping_partner_ids', 'shipping_only'].includes(field.name)) {
+          return;
+        }
+        if (voucherType === 'shop' && ['product_ids', 'shipping_partner_ids', 'shipping_only'].includes(field.name)) {
+          return;
+        }
+        if (voucherType === 'product' && ['shop_ids', 'shipping_partner_ids', 'shipping_only'].includes(field.name)) {
+          return;
+        }
+        if (voucherType === 'shipping' && ['shop_ids', 'product_ids'].includes(field.name)) {
+          return;
+        }
+
+        if (field.type === 'multiselect') {
+          const value = this.form[field.name] || [];
+          value.forEach(item => {
+            const id = parseInt(typeof item === 'object' ? item.value : item, 10);
+            if (!isNaN(id)) {
+              // Explicitly append as a number to ensure backend receives an integer
+              formData.append(`${field.name}[]`, id.toString());
+            } else {
+              console.warn(`Skipping invalid ${field.name} value:`, item);
+            }
+          });
+        } else if (field.type === 'checkbox-group') {
+          const value = this.form[field.name] || [];
+          value.forEach(item => {
+            const id = parseInt(item, 10);
+            if (!isNaN(id)) {
+              formData.append(`${field.name}[]`, id.toString());
+            } else {
+              console.warn(`Skipping invalid ${field.name} value:`, item);
+            }
+          });
+        } else if (field.type === 'checkbox') {
+          formData.append(field.name, this.form[field.name] ? '1' : '0');
+        } else if (field.type === 'file' && this.form[field.name] instanceof File) {
+          formData.append(field.name, this.form[field.name]);
+        } else {
+          formData.append(field.name, this.form[field.name] || '');
+        }
+      });
+
+      // Log FormData for debugging
+      for (let [key, value] of formData.entries()) {
+        console.log(`FormData: ${key} = ${value instanceof File ? value.name : value}`);
       }
 
-      this.$emit('submit', payload);
+      this.$emit('submit', formData);
       this.isSubmitting = false;
     },
   },
@@ -273,13 +404,19 @@ export default {
 </script>
 
 <style scoped>
-.max-h-[80vh] { max-height: 80vh; }
-.max-h-48 { max-height: 12rem; }
+.max-h-\[80vh\] {
+  max-height: 80vh;
+}
+.max-h-48 {
+  max-height: 12rem;
+}
 .overflow-y-auto {
   scrollbar-width: thin;
   scrollbar-color: #9ca3af #f1f5f9;
 }
-.overflow-y-auto::-webkit-scrollbar { width: 8px; }
+.overflow-y-auto::-webkit-scrollbar {
+  width: 8px;
+}
 .overflow-y-auto::-webkit-scrollbar-track {
   background: #f1f5f9;
   border-radius: 4px;
@@ -288,5 +425,7 @@ export default {
   background: #9ca3af;
   border-radius: 4px;
 }
-.overflow-y-auto::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
 </style>

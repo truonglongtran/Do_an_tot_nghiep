@@ -14,6 +14,7 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained('products');
             $table->foreignId('product_variant_id')->constrained('product_variants')->onDelete('cascade');
             $table->integer('quantity')->unsigned();
+            $table->boolean('is_reviewed')->default(false);
             $table->timestamps();
         });
     }

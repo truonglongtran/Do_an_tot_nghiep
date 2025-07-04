@@ -9,34 +9,70 @@ use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $orders = Order::with(['buyer', 'seller', 'items.product', 'items.productVariant'])->get();
-        Log::info('Orders fetched', [
-            'order_count' => $orders->count(),
-            'orders' => $orders->map(function ($order) {
-                return [
-                    'id' => $order->id,
-                    'total_amount' => $order->total_amount,
-                    'item_count' => $order->items->count(),
-                    'items' => $order->items->map(function ($item) {
-                        return [
-                            'id' => $item->id,
-                            'variant_id' => $item->product_variant_id,
-                            'price' => $item->productVariant ? $item->productVariant->price : null,
-                            'quantity' => $item->quantity,
-                        ];
-                    })->toArray(),
-                ];
-            })->toArray(),
-        ]);
-        return response()->json($orders);
+        try {
+            $perPage = $request->input('per_page', 10);
+            $orders = Order::with([
+                'buyer' => fn($q) => $q->select('id', 'email'),
+                'seller' => fn($q) => $q->select('id', 'email'),
+                'items.product' => fn($q) => $q->select('id', 'name'),
+                'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+            ])->select('id', 'buyer_id', 'seller_id', 'total', 'settled_status', 'shipping_status', 'order_status', 'created_at')
+                ->paginate($perPage);
+
+            Log::info('Orders fetched', [
+                'order_count' => $orders->total(),
+                'page' => $orders->currentPage(),
+                'per_page' => $perPage,
+                'orders' => $orders->map(function ($order) {
+                    return [
+                        'id' => $order->id,
+                        'total' => $order->total, // Changed from total_amount to total
+                        'item_count' => $order->items->count(),
+                        'items' => $order->items->map(function ($item) {
+                            return [
+                                'id' => $item->id,
+                                'variant_id' => $item->product_variant_id,
+                                'price' => $item->productVariant?->price ?? 0,
+                                'quantity' => $item->quantity,
+                            ];
+                        })->toArray(),
+                    ];
+                })->toArray(),
+            ]);
+
+            return response()->json([
+                'data' => $orders->items(),
+                'current_page' => $orders->currentPage(),
+                'last_page' => $orders->lastPage(),
+                'per_page' => $orders->perPage(),
+                'total' => $orders->total(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in OrderController::index: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['error' => 'Server error'], 500);
+        }
     }
 
     public function show($id)
     {
-        $order = Order::with(['buyer', 'seller', 'items.product', 'items.productVariant'])->findOrFail($id);
-        return response()->json($order);
+        try {
+            $order = Order::with([
+                'buyer' => fn($q) => $q->select('id', 'email'),
+                'seller' => fn($q) => $q->select('id', 'email'),
+                'items.product' => fn($q) => $q->select('id', 'name'),
+                'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+            ])->select('id', 'buyer_id', 'seller_id', 'total', 'settled_status', 'shipping_status', 'order_status', 'created_at')
+                ->findOrFail($id);
+
+            return response()->json($order);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['error' => 'Order not found'], 404);
+        } catch (\Exception $e) {
+            Log::error('Error in OrderController::show: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['error' => 'Server error'], 500);
+        }
     }
 
     public function updateSettledStatus(Request $request, $id)
@@ -56,7 +92,12 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Cập nhật trạng thái thanh toán thành công',
-                'order' => $order->load(['buyer', 'seller', 'items.product', 'items.productVariant'])
+                'order' => $order->load([
+                    'buyer' => fn($q) => $q->select('id', 'email'),
+                    'seller' => fn($q) => $q->select('id', 'email'),
+                    'items.product' => fn($q) => $q->select('id', 'name'),
+                    'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+                ])
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation Error in Settled Status', ['errors' => $e->errors(), 'payload' => $request->all()]);
@@ -89,7 +130,12 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Cập nhật trạng thái vận chuyển thành công',
-                'order' => $order->load(['buyer', 'seller', 'items.product', 'items.productVariant'])
+                'order' => $order->load([
+                    'buyer' => fn($q) => $q->select('id', 'email'),
+                    'seller' => fn($q) => $q->select('id', 'email'),
+                    'items.product' => fn($q) => $q->select('id', 'name'),
+                    'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+                ])
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation Error in Shipping Status', ['errors' => $e->errors(), 'payload' => $request->all()]);
@@ -122,7 +168,12 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Cập nhật trạng thái đơn hàng thành công',
-                'order' => $order->load(['buyer', 'seller', 'items.product', 'items.productVariant'])
+                'order' => $order->load([
+                    'buyer' => fn($q) => $q->select('id', 'email'),
+                    'seller' => fn($q) => $q->select('id', 'email'),
+                    'items.product' => fn($q) => $q->select('id', 'name'),
+                    'items.productVariant' => fn($q) => $q->select('id', 'product_id', 'price', 'sku')
+                ])
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation Error in Order Status', ['errors' => $e->errors(), 'payload' => $request->all()]);

@@ -26,7 +26,7 @@
             </template>
             <template v-else-if="field.type === 'image'">
               <img
-                :src="getFieldValue(data, field.key)"
+                :src="getImageUrl(getFieldValue(data, field.key))"
                 alt="Field Image"
                 class="w-full max-h-64 object-contain rounded mt-2"
                 @error="handleImageError($event, field)"
@@ -56,7 +56,7 @@
                   >
                     <img
                       v-if="isImageUrl(item)"
-                      :src="item"
+                      :src="getImageUrl(item)"
                       alt="Field Image"
                       class="w-full max-h-64 object-contain rounded mt-2"
                       @error="handleImageError($event, field)"
@@ -117,6 +117,26 @@ export default {
       if (typeof value === 'object' && value !== null && Object.keys(value).length === 0) return null;
       return value;
     },
+    getImageUrl(imgUrl) {
+      console.log('Đường dẫn ảnh đầu vào:', imgUrl);
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+
+      // Xử lý URL bên ngoài (bắt đầu bằng http:// hoặc https://)
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
+      }
+
+      // Xử lý đường dẫn cục bộ (ví dụ: /storage/banners/56.png hoặc banners/56.png)
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, ''); // Loại bỏ /storage/ hoặc /
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
     formatDate(date) {
       if (!date) return 'Không có';
       try {
@@ -149,8 +169,13 @@ export default {
       return url.length > 30 ? url.substring(0, 27) + '...' : url;
     },
     handleImageError(event, field) {
-      event.target.src = '/path/to/placeholder-image.jpg';
-      console.warn(`Failed to load image for field ${field.label}: ${event.target.src}`);
+      console.error('Lỗi tải ảnh:', {
+        field_label: field.label,
+        img_url: this.getFieldValue(this.data, field.key),
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
     },
     isImageUrl(value) {
       if (typeof value !== 'string') return false;
@@ -169,7 +194,7 @@ export default {
 </script>
 
 <style scoped>
-/* Ensure spacing between label and value */
+/* Đảm bảo khoảng cách giữa nhãn và giá trị */
 p {
   display: flex;
   align-items: flex-start;
@@ -177,22 +202,22 @@ p {
 }
 
 strong {
-  width: 160px; /* Fixed width for labels to align values */
-  flex-shrink: 0; /* Prevent label from shrinking */
+  width: 160px; /* Độ rộng cố định cho nhãn để căn chỉnh giá trị */
+  flex-shrink: 0; /* Ngăn nhãn bị co lại */
 }
 
 .value {
-  flex-grow: 1; /* Allow value to take remaining space */
-  margin-left: 12px; /* Add spacing between label and value */
+  flex-grow: 1; /* Cho phép giá trị chiếm không gian còn lại */
+  margin-left: 12px; /* Thêm khoảng cách giữa nhãn và giá trị */
 }
 
-/* Style for lists to ensure consistent spacing */
+/* Định dạng cho danh sách để đảm bảo khoảng cách nhất quán */
 ul {
   margin-top: 4px;
   margin-bottom: 4px;
 }
 
-/* Ensure images and links align properly */
+/* Đảm bảo hình ảnh và liên kết được căn chỉnh đúng */
 img, a {
   display: block;
 }

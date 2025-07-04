@@ -39,6 +39,7 @@ class OrderItemSeeder extends Seeder
                             'product_id' => $productId,
                             'product_variant_id' => $variantId,
                             'quantity' => rand(1, 5),
+                            'is_reviewed' => false,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ];

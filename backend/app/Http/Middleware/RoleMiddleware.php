@@ -3,6 +3,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class RoleMiddleware
@@ -10,10 +11,13 @@ class RoleMiddleware
     public function handle(Request $request, Closure $next, ...$roles): Response
     {
         $user = $request->user();
-        if (!$user || !in_array($user->role, $roles)) {
+        Log::info("CheckRole middleware: user=" . ($user ? $user->id . ", role=" . $user->role : 'null') . ", required_roles=" . json_encode($roles));
+        if (!$user || !in_array(strtolower($user->role), array_map('strtolower', $roles))) {
+            Log::warning("Role check failed: user=" . ($user ? $user->id . ", role=" . $user->role : 'null') . ", required_roles=" . json_encode($roles));
             return response()->json(['message' => 'Không có quyền truy cập'], 403);
         }
 
+        // Các kiểm tra khác cho admin và moderator
         $route = $request->route()->getName();
         $method = $request->method();
 

@@ -18,7 +18,6 @@
       </button>
     </div>
     <FormModal
-      v-if="showFormModal"
       :show="showFormModal"
       :title="editingVoucher ? 'Sửa Voucher' : 'Thêm Voucher'"
       :fields="voucherFormFields"
@@ -163,6 +162,12 @@ export default {
           type: 'text',
           required: true,
           placeholder: 'Nhập mã voucher',
+          rules: [
+            {
+              validator: (value) => value && value.trim().length > 0,
+              message: 'Mã voucher không được để trống.',
+            },
+          ],
         },
         {
           name: 'voucher_type',
@@ -189,9 +194,10 @@ export default {
           labelKey: 'label',
           trackBy: 'value',
           placeholder: 'Chọn cửa hàng',
-          required: true,
+          required: this.formData.voucher_type === 'shop',
           noResultText: 'Không tìm thấy cửa hàng',
           emptyOptionsText: 'Không có cửa hàng nào được tải',
+          showWhen: () => this.formData.voucher_type === 'shop',
         },
         {
           name: 'product_ids',
@@ -201,15 +207,18 @@ export default {
           labelKey: 'label',
           trackBy: 'value',
           placeholder: 'Chọn sản phẩm',
-          required: true,
+          required: this.formData.voucher_type === 'product',
           noResultText: 'Không tìm thấy sản phẩm',
           emptyOptionsText: 'Không có sản phẩm nào được tải',
+          showWhen: () => this.formData.voucher_type === 'product',
         },
         {
           name: 'shipping_only',
           label: 'Chỉ áp dụng phí vận chuyển',
           type: 'checkbox',
           defaultValue: false,
+          required: this.formData.voucher_type === 'shipping',
+          showWhen: () => this.formData.voucher_type === 'shipping',
         },
         {
           name: 'shipping_partner_ids',
@@ -220,7 +229,8 @@ export default {
             label: partner.name,
           })),
           defaultValue: [],
-          required: false,
+          required: this.formData.voucher_type === 'shipping',
+          showWhen: () => this.formData.voucher_type === 'shipping',
         },
         {
           name: 'discount_type',
@@ -240,6 +250,12 @@ export default {
           required: true,
           defaultValue: 0,
           placeholder: 'Nhập giá trị giảm giá',
+          rules: [
+            {
+              validator: (value) => value >= 0,
+              message: 'Giá trị giảm giá phải lớn hơn hoặc bằng 0.',
+            },
+          ],
         },
         {
           name: 'min_order_amount',
@@ -248,6 +264,12 @@ export default {
           required: true,
           defaultValue: 0,
           placeholder: 'Nhập số tiền tối thiểu',
+          rules: [
+            {
+              validator: (value) => value >= 0,
+              message: 'Số tiền đơn hàng tối thiểu phải lớn hơn hoặc bằng 0.',
+            },
+          ],
         },
         {
           name: 'usage_limit',
@@ -256,6 +278,12 @@ export default {
           required: true,
           defaultValue: 0,
           placeholder: 'Nhập giới hạn sử dụng (0 = không giới hạn)',
+          rules: [
+            {
+              validator: (value) => value >= 0,
+              message: 'Giới hạn sử dụng phải lớn hơn hoặc bằng 0.',
+            },
+          ],
         },
         {
           name: 'start_date',
@@ -268,6 +296,15 @@ export default {
           label: 'Ngày kết thúc',
           type: 'date',
           required: true,
+          rules: [
+            {
+              validator: (value) => {
+                if (!this.formData.start_date || !value) return true;
+                return new Date(value) >= new Date(this.formData.start_date);
+              },
+              message: 'Ngày kết thúc phải sau ngày bắt đầu.',
+            },
+          ],
         },
       ];
     },
@@ -282,7 +319,6 @@ export default {
           label: 'Loại voucher',
           key: 'voucher_type',
           type: 'text',
-          customFormat: (value) => value ? value.charAt(0).toUpperCase() + value.slice(1) : 'Không có',
         },
         {
           label: 'Loại giảm giá',
@@ -473,12 +509,10 @@ export default {
     },
     async fetchShops() {
       const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Vui lòng đăng nhập để tải danh sách cửa hàng.');
-        this.$router.push('/admin/login');
-        return;
-      }
       try {
+        if (!token) {
+          throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
+        }
         const response = await axios.get('/admin/shops', {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -498,21 +532,21 @@ export default {
     },
     async fetchProducts() {
       const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Vui lòng đăng nhập để tải danh sách sản phẩm.');
-        this.$router.push('/admin/login');
-        return;
-      }
       try {
+        if (!token) {
+          throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
+        }
         const response = await axios.get('/admin/products', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        this.products = response.data;
-        console.log('Products loaded:', this.products);
-        if (!this.products.length) {
-          console.warn('Danh sách sản phẩm rỗng.');
-          alert('Không có sản phẩm nào trong hệ thống.');
+        if (response.data && Array.isArray(response.data.data)) {
+          this.products = response.data.data;
+        } else {
+          this.products = response.data || [];
+          console.warn('Products data is not an array:', response.data);
+          alert('Dữ liệu sản phẩm không hợp lệ.');
         }
+        console.log('Products loaded:', this.products);
       } catch (error) {
         console.error('Lỗi khi tải danh sách sản phẩm:', error);
         alert(`Không thể tải danh sách sản phẩm: ${error.response?.data?.message || error.message}`);
@@ -523,12 +557,10 @@ export default {
     },
     async fetchShippingPartners() {
       const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Vui lòng đăng nhập để tải danh sách đối tác vận chuyển.');
-        this.$router.push('/admin/login');
-        return;
-      }
       try {
+        if (!token) {
+          throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
+        }
         const response = await axios.get('/admin/shipping-partners', {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -552,7 +584,7 @@ export default {
         alert(`Bạn không có quyền ${this.editingVoucher ? 'sửa' : 'tạo'} voucher.`);
         return;
       }
-      console.log('Submitting form:', form, 'Editing:', !!this.editingVoucher);
+      console.log('Submitting form:', Array.from(form.entries()));
       try {
         const response = this.editingVoucher
           ? await axios.put(
@@ -581,23 +613,25 @@ export default {
         console.error('Lỗi khi xử lý form voucher:', error);
         if (error.response?.status === 422) {
           const errors = error.response.data.errors;
+          this.$refs.formModal.errors = errors; // Pass errors to FormModal
           let errorMessage = 'Lỗi xác thực:\n';
           for (const field in errors) {
             errorMessage += `- ${field}: ${errors[field].join(', ')}\n`;
           }
+          console.log('Validation errors:', errors);
           alert(errorMessage);
         } else {
+          console.error('Server error:', error.response?.data);
           alert('Lỗi: ' + (error.response?.data?.message || error.message));
         }
       }
     },
     async deleteVoucher(voucherId) {
       const token = localStorage.getItem('token');
-      if (!this.hasPermission('delete')) {
-        alert('Bạn không có quyền xóa voucher.');
-        return;
-      }
       try {
+        if (!token) {
+          throw new Error('Không tìm thấy token. Vui lòng đăng nhập lại.');
+        }
         await axios.delete(`/admin/vouchers/${voucherId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -607,6 +641,9 @@ export default {
       } catch (error) {
         console.error('Lỗi khi xóa voucher:', error);
         alert('Xóa voucher thất bại');
+        if (error.response?.status === 401) {
+          this.$router.push('/admin/login');
+        }
       }
     },
     openConfirmModal(action, voucher) {
@@ -643,7 +680,20 @@ export default {
       }
       console.log('Opening add form');
       this.editingVoucher = null;
-      this.formData = {};
+      this.formData = {
+        code: '',
+        voucher_type: 'platform',
+        discount_type: 'fixed',
+        discount_value: 0,
+        min_order_amount: 0,
+        usage_limit: 0,
+        start_date: '',
+        end_date: '',
+        shop_ids: [],
+        product_ids: [],
+        shipping_partner_ids: [],
+        shipping_only: false,
+      };
       this.showFormModal = true;
       this.$refs.formModal.initializeForm(this.formData);
     },
@@ -736,7 +786,7 @@ export default {
         start_date: this.formData.start_date || '',
         end_date: this.formData.end_date || '',
       };
-      this.formData = { ...this.formData, ...resetData };
+      this.formData = { ...resetData };
       this.$refs.formModal.initializeForm(this.formData);
     },
   },

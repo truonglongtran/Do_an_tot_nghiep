@@ -10,8 +10,8 @@ return new class extends Migration {
         Schema::create('banners', function (Blueprint $table) {
             $table->id();
             $table->string('title', 255);
-            $table->string('img_url', 255);
-            $table->string('link_url', 255);
+            $table->string('img_url', 255); // Keep non-nullable as per original
+            $table->string('link_url', 255)->nullable(); // Allow link_url to be nullable
             $table->dateTime('start_date');
             $table->dateTime('end_date');
             $table->timestamps();
@@ -34,7 +34,6 @@ return new class extends Migration {
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            // UNIQUE để đảm bảo không trùng bộ ba (banner, location, shop)
             $table->unique(['banner_id', 'location_id', 'shop_id']);
 
             $table->foreign('banner_id')->references('id')->on('banners')->onDelete('cascade');

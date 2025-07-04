@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Login from '../views/Login/Login.vue';
 import AdminLayout from '../views/Admin/AdminLayout.vue';
-import SellerDashboard from '../views/Seller/SellerDashboard.vue';
-import BuyerDashboard from '../views/Buyer/BuyerDashboard.vue';
+import SellerLayout from '../views/Seller/SellerLayout.vue';
+import BuyerLayout from '../views/Buyer/BuyerLayout.vue';
+import BuyerRegister from '../views/Buyer/BuyerRegister.vue';
+import SellerRegister from '../views/Seller/SellerRegister.vue';
 
 const routes = [
   {
@@ -20,6 +22,17 @@ const routes = [
     path: '/buyer/login',
     name: 'BuyerLogin',
     component: Login,
+  },
+  {
+    path: '/buyer/register',
+    name: 'BuyerRegister',
+    component: BuyerRegister,
+    meta: { requiresGuest: true },
+  },
+  {
+    path: '/seller/register',
+    name: 'SellerRegister',
+    component: SellerRegister,
   },
   {
     path: '/admin',
@@ -196,16 +209,244 @@ const routes = [
     ],
   },
   {
-    path: '/seller/dashboard',
-    name: 'SellerDashboard',
-    component: SellerDashboard,
+    path: '/seller',
+    component: SellerLayout,
     meta: { requiresAuth: true, roles: ['seller'], loginPath: '/seller/login' },
+    children: [
+      {
+        path: 'dashboard',
+        component: () => import('@/views/Seller/SellerDashboard.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view'] },
+        },
+      },
+      {
+        path: 'orders',
+        component: () => import('@/views/Seller/SellerOrders.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'orders/delivery',
+        component: () => import('@/views/Seller/SellerOrders.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'orders/returns',
+        component: () => import('@/views/Seller/SellerOrders.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'shipping/settings',
+        component: () => import('@/views/Seller/SellerShippingSettings.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'products/all',
+        component: () => import('@/views/Seller/SellerProductsAll.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'products/add',
+        component: () => import('@/views/Seller/SellerProductsAdd.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'products/edit/:id',
+        component: () => import('@/views/Seller/SellerProductsAdd.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'customer-service/reviews',
+        component: () => import('@/views/Seller/SellerReviews.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view'] },
+        },
+      },
+      {
+        path: 'finance/revenue',
+        name: 'SellerFinanceRevenue',
+        component: () => import('@/views/Seller/SellerRevenue.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view'] },
+        },
+      },
+      {
+        path: 'shop/profile',
+        name: 'SellerShopProfile',
+        component: () => import('@/views/Seller/SellerShopProfile.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'shop/settings',
+        name: 'SellerShopSettings',
+        component: () => import('@/views/Seller/SellerShopSettings.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'shop/decoration',
+        name: 'SellerShopDecoration',
+        component: () => import('@/views/Seller/SellerShopDecoration.vue'),
+        meta: {
+          requiresAuth: true,
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+      {
+        path: 'customer-service/chat',
+        component: () => import('@/views/Seller/SellerMessages.vue'),
+        meta: {
+          roles: ['seller'],
+          permissions: { seller: ['view', 'update'] },
+        },
+      },
+    ],
   },
   {
-    path: '/buyer/dashboard',
-    name: 'BuyerDashboard',
-    component: BuyerDashboard,
-    meta: { requiresAuth: true, roles: ['buyer', 'seller'], loginPath: '/buyer/login' },
+    path: '/',
+    component: BuyerLayout,
+    children: [
+      {
+        path: '',
+        name: 'Home',
+        component: () => import('@/views/Buyer/Home.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'cart',
+        name: 'Cart',
+        component: () => import('@/views/Buyer/Cart.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/messages',
+        name: 'BuyerMessages',
+        component: () => import('@/views/Buyer/BuyerMessages.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/notifications',
+        name: 'BuyerNotifications',
+        component: () => import('@/views/Buyer/BuyerNotifications.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'search',
+        name: 'Search',
+        component: () => import('@/views/Buyer/Search.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'products/:id',
+        name: 'ProductDetail',
+        component: () => import('@/views/Buyer/ProductDetail.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'categories',
+        name: 'CategoryAll',
+        component: () => import('@/views/Buyer/CategoryAll.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'categories/:slug',
+        name: 'CategoryDetail',
+        component: () => import('@/views/Buyer/CategoryDetail.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'shops/:id',
+        name: 'Shop',
+        component: () => import('@/views/Buyer/Shop.vue'),
+        meta: { requiresAuth: false },
+      },
+      {
+        path: 'buyer/orders',
+        name: 'Orders',
+        component: () => import('@/views/Buyer/Orders.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'orders/create',
+        name: 'OrderCreate',
+        component: () => import('@/views/Buyer/OrderCreate.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/order-success',
+        name: 'OrderSuccess',
+        component: () => import('@/views/Buyer/OrderSuccess.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/profile',
+        name: 'ProfileEdit',
+        component: () => import('@/views/Buyer/ProfileEdit.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/order-tracking',
+        name: 'OrderTracking',
+        component: () => import('@/views/Buyer/OrderTracking.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/orders/:order_id/reviews',
+        name: 'OrderReview',
+        component: () => import('@/views/Buyer/OrderReview.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'reviews',
+        name: 'Reviews',
+        component: () => import('@/views/Buyer/Reviews.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'buyer/reviews/create',
+        name: 'ReviewCreate',
+        component: () => import('@/views/Buyer/ReviewCreate.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+      {
+        path: 'addresses',
+        name: 'Addresses',
+        component: () => import('@/views/Buyer/Addresses.vue'),
+        meta: { requiresAuth: true, roles: ['buyer'], loginPath: '/buyer/login' },
+      },
+    ],
   },
   {
     path: '/:pathMatch(.*)*',
@@ -231,15 +472,19 @@ router.beforeEach((to, from, next) => {
       return next('/admin/dashboard');
     } else if (loginType === 'seller') {
       return next('/seller/dashboard');
-    } else {
-      return next('/buyer/dashboard');
+    } else if (loginType === 'buyer') {
+      return next('/');
     }
+    return next('/');
   }
 
   // Handle routes requiring authentication
   if (to.meta.requiresAuth) {
     if (!token || !role || !loginType) {
-      console.log('No token/role/loginType, redirecting to:', to.meta.loginPath || '/buyer/login');
+      console.log('Missing token, role, or loginType, redirecting to:', to.meta.loginPath || '/buyer/login');
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      localStorage.removeItem('loginType');
       return next(to.meta.loginPath || '/buyer/login');
     }
 
@@ -250,9 +495,10 @@ router.beforeEach((to, from, next) => {
         return next('/admin/dashboard');
       } else if (loginType === 'seller') {
         return next('/seller/dashboard');
-      } else {
-        return next('/buyer/dashboard');
+      } else if (loginType === 'buyer') {
+        return next('/');
       }
+      return next('/');
     }
 
     // Check permissions if defined

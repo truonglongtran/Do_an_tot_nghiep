@@ -45,7 +45,12 @@
             <td class="p-3 border-b">{{ index + 1 }}</td>
             <td class="p-3 border-b">{{ banner.title || 'N/A' }}</td>
             <td class="p-3 border-b">
-              <img :src="banner.img_url" alt="Banner" class="w-16 h-16 object-cover rounded" @error="handleImageError($event, banner)" />
+              <img
+                :src="getImageUrl(banner.img_url)"
+                alt="Banner"
+                class="w-16 h-16 object-cover rounded"
+                @error="handleImageError($event, banner)"
+              />
             </td>
             <td class="p-3 border-b">
               <a v-if="banner.link_url" :href="banner.link_url" target="_blank" class="text-blue-600 hover:underline">
@@ -83,7 +88,6 @@
       </table>
     </div>
 
-    <!-- Modal for Viewing Details -->
     <GenericDetailsModal
       :show="showDetailModal"
       :data="selectedBanner"
@@ -92,7 +96,6 @@
       @close="closeDetailModal"
     />
 
-    <!-- Modal for Adding/Editing/Deleting Banner -->
     <FormModal
       v-if="showBannerModal"
       :show="showBannerModal"
@@ -100,6 +103,7 @@
       :fields="modalFields"
       :initialData="modalInitialData"
       :isEdit="modalMode === 'edit'"
+      :modalMode="modalMode"
       @close="closeBannerModal"
       @submit="handleBannerFormSubmit"
       ref="formModal"
@@ -152,6 +156,9 @@ export default {
     };
   },
   computed: {
+    baseUrl() {
+      return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    },
     bannerFormFields() {
       return [
         {
@@ -169,14 +176,21 @@ export default {
         },
         {
           name: 'img_url',
-          label: 'URL hình ảnh',
-          type: 'url',
-          placeholder: 'Nhập URL hình ảnh (http:// hoặc https://)',
-          required: true,
+          label: 'Hình ảnh',
+          type: 'file',
+          accept: 'image/*',
+          required: this.modalMode === 'add',
           rules: [
             {
-              validator: (value) => /^https?:\/\/[^\s/$.?#].[^\s]*$/.test(value),
-              message: 'URL hình ảnh không hợp lệ',
+              validator: (value) => {
+                if (value instanceof File) return true; // Cho phép tải lên file
+                if (typeof value === 'string') {
+                  // Cho phép URL bên ngoài hoặc đường dẫn cục bộ hợp lệ
+                  return /^https?:\/\/[^\s/$.?#].[^\s]*$/.test(value) || /^[a-zA-Z0-9][^\s/]*$/.test(value);
+                }
+                return false;
+              },
+              message: 'Vui lòng chọn file ảnh hợp lệ hoặc cung cấp URL/đường dẫn hợp lệ (không bắt đầu bằng /storage/)',
             },
           ],
         },
@@ -263,8 +277,8 @@ export default {
     },
   },
   async mounted() {
-    console.log('Mounted AdminBanners, Role:', localStorage.getItem('role'));
-    console.log('Has view permission:', this.hasPermission('view'));
+    console.log('Khởi tạo AdminBanners, Role:', localStorage.getItem('role'));
+    console.log('VITE_STORAGE_BASE_URL:', import.meta.env.VITE_STORAGE_BASE_URL);
     await this.fetchBanners();
   },
   methods: {
@@ -288,20 +302,20 @@ export default {
         const params = {};
         if (this.positionFilter !== 'all') params.position = this.positionFilter;
         if (this.searchQuery) params.title = this.searchQuery;
-        console.log('Fetching banners with:', { token, params });
+        console.log('Tải danh sách banner với:', { token, params });
         const response = await axios.get('/admin/banners', {
           headers: { Authorization: `Bearer ${token}` },
           params,
         });
-        console.log('Response:', response.data);
+        console.log('Danh sách banner đã tải:', response.data.banners);
         if (!Array.isArray(response.data.banners)) {
-          throw new Error('Dữ liệu banners không đúng định dạng.');
+          throw new Error('Dữ liệu banner không đúng định dạng.');
         }
         this.banners = response.data.banners;
         this.positions = response.data.positions || ['homepage', 'sidebar', 'footer'];
         this.errorMessage = '';
       } catch (error) {
-        console.error('Lỗi khi tải banners:', error.response || error);
+        console.error('Lỗi khi tải banner:', error.response || error);
         this.errorMessage = error.response?.status === 401
           ? 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.'
           : 'Không thể tải danh sách banner: ' + (error.message || 'Lỗi không xác định.');
@@ -310,8 +324,28 @@ export default {
         }
       }
     },
-    async handleBannerFormSubmit(form) {
-      console.log('Form data:', form, 'Mode:', this.modalMode);
+    getImageUrl(imgUrl) {
+      console.log('Đường dẫn ảnh đầu vào:', imgUrl);
+      if (!imgUrl) {
+        console.warn('Không có đường dẫn ảnh, sử dụng ảnh placeholder');
+        return 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
+      }
+
+      // Xử lý URL bên ngoài (bắt đầu bằng http:// hoặc https://)
+      if (/^https?:\/\//.test(imgUrl)) {
+        console.log('Sử dụng URL bên ngoài:', imgUrl);
+        return `${imgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
+      }
+
+      // Xử lý đường dẫn cục bộ (ví dụ: /storage/banners/56.png hoặc banners/56.png)
+      const baseUrl = import.meta.env.VITE_STORAGE_BASE_URL || 'http://localhost:8000/storage';
+      const cleanImgUrl = imgUrl.replace(/^\/?(storage\/)?/, ''); // Loại bỏ /storage/ hoặc /
+      const finalUrl = `${baseUrl}/${cleanImgUrl}?t=${new Date().getTime()}`; // Thêm cache-busting
+      console.log('Đường dẫn ảnh đã tạo:', finalUrl);
+      return finalUrl;
+    },
+    async handleBannerFormSubmit(formData) {
+      console.log('Gửi dữ liệu form:', Array.from(formData.entries()), 'Chế độ:', this.modalMode);
       if (!this.hasPermission(this.modalMode === 'add' ? 'create' : this.modalMode === 'edit' ? 'update' : 'delete')) {
         alert(`Bạn không có quyền ${this.modalMode === 'add' ? 'tạo' : this.modalMode === 'edit' ? 'cập nhật' : 'xóa'} banner.`);
         return;
@@ -327,16 +361,27 @@ export default {
         if (this.modalMode === 'add') {
           response = await axios.post(
             '/admin/banners',
-            form,
-            { headers: { Authorization: `Bearer ${token}` } }
+            formData,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data',
+              },
+            }
           );
           this.banners.push(response.data.banner);
           alert('Thêm banner thành công');
         } else if (this.modalMode === 'edit') {
-          response = await axios.put(
+          response = await axios.post(
             `/admin/banners/${this.selectedBanner.id}`,
-            form,
-            { headers: { Authorization: `Bearer ${token}` } }
+            formData,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data',
+              },
+              params: { _method: 'PUT' },
+            }
           );
           const index = this.banners.findIndex(b => b.id === this.selectedBanner.id);
           this.banners.splice(index, 1, response.data.banner);
@@ -388,8 +433,13 @@ export default {
       return url.length > 30 ? url.slice(0, 27) + '...' : url;
     },
     handleImageError(event, banner) {
-      event.target.src = 'https://via.placeholder.com/150?text=Image+Not+Found';
-      banner.img_url = event.target.src;
+      console.error('Lỗi tải ảnh:', {
+        banner_id: banner.id,
+        img_url: banner.img_url,
+        attempted_url: event.target.src,
+        storage_base_url: import.meta.env.VITE_STORAGE_BASE_URL,
+      });
+      event.target.src = 'https://via.placeholder.com/150?text=Ảnh+Không+Tìm+Thấy';
     },
     applySearch() {
       this.fetchBanners();
@@ -411,7 +461,12 @@ export default {
       this.modalTitle = 'Thêm banner';
       this.modalFields = this.bannerFormFields;
       this.modalInitialData = {
+        title: '',
+        img_url: '',
+        link_url: '',
         position: this.positions.length > 0 ? this.positions[0] : '',
+        start_date: new Date().toISOString().slice(0, 16),
+        end_date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().slice(0, 16),
       };
       this.showBannerModal = true;
       if (this.$refs.formModal) {
